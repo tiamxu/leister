@@ -1,7 +1,7 @@
 package jenkins
 
 import (
-	"github.com/tiamxu/kit/cmd/config"
+	"github.com/tiamxu/leister/config"
 
 	"github.com/koding/multiconfig"
 )

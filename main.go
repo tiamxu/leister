@@ -6,11 +6,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/tiamxu/kit/build"
+	"github.com/tiamxu/leister/build"
 
-	"github.com/tiamxu/kit/cmd/gitlab"
-	"github.com/tiamxu/kit/jenkins"
-	"github.com/tiamxu/kit/kube"
+	"github.com/tiamxu/leister/gitlab"
+	"github.com/tiamxu/leister/jenkins"
+	"github.com/tiamxu/leister/kube"
 
 	"github.com/urfave/cli/v2"
 )

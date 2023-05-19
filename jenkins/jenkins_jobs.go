@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/tiamxu/kit/cmd/config"
+	"github.com/tiamxu/leister/config"
 
 	"github.com/bndr/gojenkins"
 	"github.com/urfave/cli/v2"
