@@ -1,9 +1,8 @@
 package jenkins
 
 import (
-	"github.com/tiamxu/leister/config"
-
 	"github.com/koding/multiconfig"
+	"github.com/tiamxu/leister/config"
 )
 
 const configPath = "config/config.yaml"

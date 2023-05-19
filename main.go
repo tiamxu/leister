@@ -7,11 +7,9 @@ import (
 	"runtime"
 
 	"github.com/tiamxu/leister/build"
-
 	"github.com/tiamxu/leister/gitlab"
 	"github.com/tiamxu/leister/jenkins"
 	"github.com/tiamxu/leister/kube"
-
 	"github.com/urfave/cli/v2"
 )
 
@@ -57,6 +55,7 @@ func main() {
 			Usage: "manage gitlab cmd",
 			Subcommands: []*cli.Command{
 				&gitlab.GetProjectCmd,
+				&gitlab.GenProjectDBCmd,
 			},
 		}
 	)

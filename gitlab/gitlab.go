@@ -7,10 +7,16 @@ import (
 var (
 	GetProjectCmd = cli.Command{
 		Name:   "get",
-		Usage:  "get gitlab project",
+		Usage:  "get gitlab project info console",
 		Flags:  Flags,
 		Before: InitFlags,
 		Action: RunGetProject,
 	}
-	GetProjectsCmd = cli.Command{}
+	GenProjectDBCmd = cli.Command{
+		Name:   "gen",
+		Usage:  "generate gitlab project data to db",
+		Flags:  Flags,
+		Before: InitGenFlags,
+		Action: RunGenProject,
+	}
 )

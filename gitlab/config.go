@@ -1,9 +1,8 @@
 package gitlab
 
 import (
-	"github.com/tiamxu/kit/sql"
-
 	"github.com/koding/multiconfig"
+	"github.com/tiamxu/leister/database"
 )
 
 const configPath = "config/config.yaml"
@@ -15,7 +14,7 @@ var (
 type Config struct {
 	Jenkins `yaml:"jenkins"`
 	Gitlab  `yaml:"gitlab"`
-	DB      *sql.Config `yaml:"db"`
+	DB      *database.Config `yaml:"db"`
 }
 type Jenkins struct {
 	Url      string `yaml:"url"`
