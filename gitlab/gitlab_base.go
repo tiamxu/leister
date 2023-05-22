@@ -31,7 +31,6 @@ var (
 func init() {
 	//load config
 	loadConfig()
-	initMySQL()
 }
 func InitFlags(c *cli.Context) error {
 	appName = c.String("name")
@@ -48,6 +47,7 @@ func InitGenFlags(c *cli.Context) error {
 	if appGroup == "" {
 		return errors.New("required OPTIONS --group or -g")
 	}
+	initMySQL()
 	return nil
 }
 func RunGetProject(c *cli.Context) error {
@@ -60,7 +60,7 @@ func RunGenProject(c *cli.Context) error {
 func genProjects(c *cli.Context) error {
 	var item = database.Item{}
 	var items = []database.Item{}
-	git, err := gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
+	git, err := Connect(cfg)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}

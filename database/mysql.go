@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"log"
+	"fmt"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -25,25 +25,37 @@ func Connect(dbConfig *Config) (err error) {
 	return
 }
 
-// 操作数据库
-func ModifyDB(sql string, args ...interface{}) (int64, error) {
-	result, err := db.Exec(sql, args...)
-	if err != nil {
-		log.Println(err)
-		return 0, err
-	}
-	count, err := result.RowsAffected()
-	if err != nil {
-		log.Println(err)
-		return 0, err
-	}
-	return count, nil
-}
 func AddItem(item Item) (int64, error) {
 	i, err := insertItem(item)
 	return i, err
 }
-func insertItem(item Item) (int64, error) {
-	sqlStr := `INSERT INTO item (code_id,app_name, app_group, app_type,ssh_url_to_repo, http_url_to_repo) VALUES (?,?,?,?,?,?);`
-	return ModifyDB(sqlStr, item.CodeID, item.AppName, item.AppGroup, item.AppType, item.SSHURLToRepo, item.HTTPURLToRepo)
+
+// 查询单行
+func QueryRowDB(sql string) *sql.Row {
+	return db.QueryRow(sql)
+}
+
+// 查询多行
+func QueryDB(sql string) (*sql.Rows, error) {
+	return db.Query(sql)
+}
+
+// func QueryItemWithName() (Item, error) {
+// 	var item Item
+// 	return item, nil
+// }
+
+// 查询所有数据
+func GetAllItemData() ([]Item, error) {
+	return QueryItemWithCon("")
+}
+
+func SelectItemByWhereWithGroup(group string, arg ...interface{}) ([]Item, error) {
+	whereSql := fmt.Sprintf("where app_group='%s'", group)
+	return QueryItemWithCon(whereSql)
+}
+
+func SelectItemByWhereWithName(name, group string, arg ...interface{}) ([]Item, error) {
+	whereSql := fmt.Sprintf("where app_name='%s' and app_group='%s'", name, group)
+	return QueryItemWithCon(whereSql)
 }

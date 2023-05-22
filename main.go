@@ -48,6 +48,7 @@ func main() {
 			Usage: "manage jenkins cmd",
 			Subcommands: []*cli.Command{
 				&jenkins.CreateJobCmd,
+				&jenkins.CreateJobsCmd,
 			},
 		}
 		GitlabCommand = cli.Command{

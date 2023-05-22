@@ -1,7 +1,7 @@
 jenkins:
   url: 'http://172.168.1.10:8088/'
   username: admin
-  password: XvLiang
+  password: 123456
 gitlab:
   url: http://172.168.1.10/
   token: glpat-57WwyFMeYAsszMzyzjsn

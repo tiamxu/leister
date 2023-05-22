@@ -3,6 +3,7 @@ package gitlab
 import (
 	"github.com/koding/multiconfig"
 	"github.com/tiamxu/leister/database"
+	"github.com/xanzy/go-gitlab"
 )
 
 const configPath = "config/config.yaml"
@@ -30,4 +31,12 @@ type Gitlab struct {
 func loadConfig() {
 	cfg = new(Config)
 	multiconfig.MustLoadWithPath(configPath, cfg)
+}
+
+func Connect(cfg *Config) (*gitlab.Client, error) {
+	git, err := gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
+	if err != nil {
+		return git, err
+	}
+	return git, nil
 }
