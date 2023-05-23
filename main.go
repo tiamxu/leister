@@ -49,6 +49,7 @@ func main() {
 			Subcommands: []*cli.Command{
 				&jenkins.CreateJobCmd,
 				&jenkins.CreateJobsCmd,
+				&jenkins.UpdateJobsCmd,
 			},
 		}
 		GitlabCommand = cli.Command{
@@ -66,6 +67,7 @@ func main() {
 		&JenkinsCommand,
 		&GitlabCommand,
 	}
+
 	if err := app.Run(os.Args); err != nil {
 		log.Fatalln(err)
 

@@ -19,4 +19,11 @@ var (
 		Before: InitCtxFlags,
 		Action: RunCreateJobs,
 	}
+	UpdateJobsCmd = cli.Command{
+		Name:   "update",
+		Usage:  "update many jenkins jobs config",
+		Flags:  Flags,
+		Before: InitCtxFlags,
+		Action: RunUpdateJobs,
+	}
 )
