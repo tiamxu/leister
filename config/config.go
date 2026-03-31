@@ -1,5 +1,11 @@
 package config
 
+import (
+	"log"
+
+	"github.com/koding/multiconfig"
+)
+
 type Config struct {
 	Jenkins `yaml:"jenkins"`
 	Gitlab  `yaml:"gitlab"`
@@ -25,6 +31,16 @@ type DB struct {
 	MaxIdleConns    int    `yaml:"max_idle_conns"`
 	MaxOpenConns    int    `yaml:"max_open_conns"`
 	ConnMaxLifetime int    `yaml:"conn_max_lifetime"`
+}
+
+func Load() *Config {
+	cfg := &Config{}
+	m := multiconfig.New()
+	// Load configuration from config.toml file
+	if err := m.Load(cfg); err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	return cfg
 }
 
 const JenkinsJobConfig = `<?xml version='1.1' encoding='UTF-8'?>

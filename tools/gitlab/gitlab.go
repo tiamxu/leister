@@ -5,59 +5,71 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/tiamxu/kit/cli"
+	"github.com/tiamxu/leister/config"
 	"github.com/tiamxu/leister/database"
-
-	"github.com/urfave/cli/v2"
 	"github.com/xanzy/go-gitlab"
 )
 
-var (
-	appName  string
-	appGroup string
-	Flags    = []cli.Flag{
-		&cli.StringFlag{
-			Name:    "name",
-			Aliases: []string{"n"},
-			Usage:   "set gitlab project name",
-		},
-		&cli.StringFlag{
-			Name:    "group",
-			Aliases: []string{"g"},
-			Usage:   "set gitlab  group",
-		},
+type Tool struct{}
+
+func (t *Tool) Name() string        { return "git" }
+func (t *Tool) Description() string { return "Manage gitlab cmd" }
+
+func (t *Tool) Flags() []cli.Flag {
+	return []cli.Flag{
+		cli.StringFlag("name", "n", "", "Set gitlab project name"),
+		cli.StringFlag("group", "g", "", "Set gitlab group"),
 	}
-)
+}
+
+func (t *Tool) Commands() []*cli.Command {
+	return []*cli.Command{
+		cli.NewCommand("get").
+			SetDescription("Get gitlab project info console").
+			AddFlags(cli.RequiredFlag(cli.StringFlag("name", "n", "", "Set gitlab project name"))).
+			AddFlags(cli.RequiredFlag(cli.StringFlag("group", "g", "", "Set gitlab group"))).
+			SetRun(func(ctx *cli.Context) error {
+				return RunGetProject(ctx)
+			}),
+		cli.NewCommand("gen").
+			SetDescription("Generate gitlab project data to db").
+			AddFlags(cli.RequiredFlag(cli.StringFlag("group", "g", "", "Set gitlab group"))).
+			SetRun(func(ctx *cli.Context) error {
+				return RunGenProject(ctx)
+			}),
+	}
+}
+
+var cfg *config.Config
 
 func init() {
 	//load config
 	loadConfig()
 }
-func InitFlags(c *cli.Context) error {
-	appName = c.String("name")
-	appGroup = c.String("group")
-	if appName == "" || appGroup == "" {
-		return errors.New("required OPTIONS --name(or -n) and --group(or -g) ")
-	}
-	return nil
+
+func loadConfig() {
+	cfg = config.Load()
 }
 
-func InitGenFlags(c *cli.Context) error {
-	appName = c.String("name")
-	appGroup = c.String("group")
+func Connect(cfg *config.Config) (*gitlab.Client, error) {
+	return gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
+}
+
+func RunGetProject(ctx *cli.Context) error {
+	return getProject(ctx)
+}
+
+func RunGenProject(ctx *cli.Context) error {
+	return genProjects(ctx)
+}
+
+func genProjects(ctx *cli.Context) error {
+	appGroup := ctx.String("group")
 	if appGroup == "" {
 		return errors.New("required OPTIONS --group or -g")
 	}
 	initMySQL()
-	return nil
-}
-func RunGetProject(c *cli.Context) error {
-	return getProject(c)
-}
-func RunGenProject(c *cli.Context) error {
-	return genProjects(c)
-}
-
-func genProjects(c *cli.Context) error {
 	var item = database.Item{}
 	var items = []database.Item{}
 	git, err := Connect(cfg)
@@ -100,7 +112,13 @@ func genProjects(c *cli.Context) error {
 	return nil
 
 }
-func getProject(c *cli.Context) error {
+
+func getProject(ctx *cli.Context) error {
+	appName := ctx.String("name")
+	appGroup := ctx.String("group")
+	if appName == "" || appGroup == "" {
+		return errors.New("required OPTIONS --name(or -n) and --group(or -g) ")
+	}
 	git, err := gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
 	if err != nil {
 		log.Fatalf("Failed to create gitlab client: %v", err)
@@ -136,7 +154,18 @@ func getProject(c *cli.Context) error {
 }
 
 func initMySQL() {
-	err := database.Connect(cfg.DB)
+	dbConfig := &database.Config{
+		Driver:          cfg.DB.Driver,
+		Database:        cfg.DB.Database,
+		Username:        cfg.DB.Username,
+		Password:        cfg.DB.Password,
+		Host:            cfg.DB.Host,
+		Port:            cfg.DB.Port,
+		MaxIdleConns:    cfg.DB.MaxIdleConns,
+		MaxOpenConns:    cfg.DB.MaxOpenConns,
+		ConnMaxLifetime: cfg.DB.ConnMaxLifetime,
+	}
+	err := database.Connect(dbConfig)
 	if err != nil {
 		fmt.Printf("DB connect failed error:%v\n", err)
 	}

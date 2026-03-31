@@ -1,75 +1,32 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"os"
-	"runtime"
-
-	"github.com/tiamxu/leister/build"
-	"github.com/tiamxu/leister/gitlab"
-	"github.com/tiamxu/leister/jenkins"
-	"github.com/tiamxu/leister/kube"
-	"github.com/urfave/cli/v2"
+	"github.com/tiamxu/kit/cli"
+	"github.com/tiamxu/leister/tools/build"
+	"github.com/tiamxu/leister/tools/jenkins"
+	"github.com/tiamxu/leister/tools/gitlab"
+	"github.com/tiamxu/leister/tools/kube"
 )
 
-var version string
-
 func main() {
-	version = "0.0.1"
-	app := cli.NewApp()
-	app.Name = ""
-	app.Version = fmt.Sprintf("%s %s/%s", version, runtime.GOOS, runtime.GOARCH)
-	app.Usage = "a new cmd tools"
-	app.Authors = []*cli.Author{
-		{
-			Name:  "timaxu",
-			Email: "1218366090@qq.com",
+	app := cli.NewApp(cli.AppConfig{
+		Name:        "gigctl",
+		Description: "DevOps tools for building, CI/CD and deployment",
+		Version:     "0.0.1",
+		PreRun: func(ctx *cli.Context) error {
+			// 加载配置等初始化操作
+			return nil
 		},
-	}
+	})
 
-	var (
-		DeployCommand = cli.Command{
-
-			Name:   "deploy",
-			Usage:  "manager deploy server",
-			Before: build.InitProject,
-			Subcommands: []*cli.Command{
-
-				&build.BuildCmd,
-				&build.PushCmd,
-				&kube.RestartCmd,
-				&kube.GetDeploymentCmd,
-				&kube.CreateDeploymentCmd,
-			},
-		}
-		JenkinsCommand = cli.Command{
-			Name:  "jks",
-			Usage: "manage jenkins cmd",
-			Subcommands: []*cli.Command{
-				&jenkins.CreateJobCmd,
-				&jenkins.CreateJobsCmd,
-				&jenkins.UpdateJobsCmd,
-			},
-		}
-		GitlabCommand = cli.Command{
-			Name:  "git",
-			Usage: "manage gitlab cmd",
-			Subcommands: []*cli.Command{
-				&gitlab.GetProjectCmd,
-				&gitlab.GenProjectDBCmd,
-			},
-		}
+	app.RegisterTool(
+		&build.Tool{},
+		&jenkins.Tool{},
+		&gitlab.Tool{},
+		&kube.Tool{},
 	)
-	app.Commands = []*cli.Command{
 
-		&DeployCommand,
-		&JenkinsCommand,
-		&GitlabCommand,
-	}
-
-	if err := app.Run(os.Args); err != nil {
-		log.Fatalln(err)
-
+	if err := app.Run(); err != nil {
+		panic(err)
 	}
 }

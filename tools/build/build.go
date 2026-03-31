@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/urfave/cli/v2"
+	"github.com/tiamxu/kit/cli"
 )
 
 const (
@@ -18,53 +19,52 @@ const (
 	Env               = "dev"
 )
 
-var (
-	version      string
-	env          string
-	lang         string
-	registryPath string
-	Flags        = []cli.Flag{
-		&cli.StringFlag{
-			Name:    "tag",
-			Aliases: []string{"t"},
-			Value:   "latest",
-			Usage:   "Set docker image tag",
-		},
-		&cli.StringFlag{
-			Name:    "env",
-			Aliases: []string{"e"},
-			Value:   "dev",
-			Usage:   "Set docker image env",
-		},
-		&cli.StringFlag{
-			Name:    "lang",
-			Aliases: []string{"l"},
-			Value:   "go",
-			Usage:   "Set type of code langue ",
-		},
-	}
-)
-var ctx *Context
+type Tool struct{}
 
-func InitProject(c *cli.Context) (err error) {
-	ctx, err = Initial(c)
-	return
+func (t *Tool) Name() string        { return "deploy" }
+func (t *Tool) Description() string { return "Manager deploy server" }
+
+func (t *Tool) Flags() []cli.Flag {
+	return []cli.Flag{
+		cli.StringFlag("tag", "t", "latest", "Set docker image tag"),
+		cli.StringFlag("env", "e", "dev", "Set docker image env"),
+		cli.StringFlag("lang", "l", "go", "Set type of code langue"),
+	}
 }
-func InitFlags(c *cli.Context) error {
-	version = c.String("tag")
-	if version == "" {
-		version = "latest"
+
+func (t *Tool) Commands() []*cli.Command {
+	return []*cli.Command{
+		cli.NewCommand("build").
+			SetDescription("Build code and docker image").
+			SetRun(func(ctx *cli.Context) error {
+				return RunBuild(ctx)
+			}),
+		cli.NewCommand("push").
+			SetDescription("Docker push image registry").
+			SetRun(func(ctx *cli.Context) error {
+				return RunPush(ctx)
+			}),
 	}
-	env = c.String("env")
-	if env == "" {
-		env = Env
+}
+
+type Context struct {
+	Name, AbsPath string
+}
+
+func Initial(c *cli.Context) (*Context, error) {
+	absPath, err := filepath.Abs("./")
+	if err != nil {
+		return nil, errors.New("get project absolute path failure, reason: " + err.Error())
 	}
-	lang = c.String("lang")
-	if lang == "" {
-		lang = "go"
-	}
-	registryPath = fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctx.Name), version)
-	return nil
+	absPath = strings.Replace(absPath, `\`, `/`, -1)
+	absPath = strings.TrimRight(absPath, "/")
+	var (
+		ctx = &Context{
+			Name:    filepath.Base(absPath),
+			AbsPath: absPath,
+		}
+	)
+	return ctx, nil
 }
 
 func needSudo() bool {
@@ -76,19 +76,22 @@ func needSudo() bool {
 	}
 	return false
 }
-func RunBuild(c *cli.Context) error {
-	if err := loginAction(c); err != nil {
+
+func RunBuild(ctx *cli.Context) error {
+	if err := loginAction(ctx); err != nil {
 		return err
 	}
-	return buildAction(c)
+	return buildAction(ctx)
 }
-func RunPush(c *cli.Context) error {
-	if err := loginAction(c); err != nil {
+
+func RunPush(ctx *cli.Context) error {
+	if err := loginAction(ctx); err != nil {
 		return err
 	}
-	return pushAction(c)
+	return pushAction(ctx)
 }
-func buildAction(c *cli.Context) error {
+
+func buildAction(ctx *cli.Context) error {
 	//dockerfile
 	if _, err := os.Stat("./Dockerfile-dev"); os.IsNotExist(err) {
 		return errors.New("docker build failed,not found Dockerfile")
@@ -99,13 +102,13 @@ func buildAction(c *cli.Context) error {
 	)
 	//code langue build
 	var codeBuilder *exec.Cmd
+	lang := ctx.String("lang")
+	env := ctx.String("env")
 	fmt.Printf("lang:%s,env:%s\n", lang, env)
 	if lang == "node" {
 		cmd := "npm run build" + ":" + env
 		exec.Command("npm", "install", "--registry=https://registry.npm.taobao.org")
-		// codeBuilder = exec.Command("npm", "run", "build")
 		codeBuilder = exec.Command("bash", "-c", cmd)
-
 	} else {
 		codeBuilder = exec.Command("go", "build", "-o", "bin/main")
 		codeBuilder.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
@@ -118,9 +121,15 @@ func buildAction(c *cli.Context) error {
 		return err
 	}
 	fmt.Println(stdout.String())
-	fmt.Printf("%s build complate\n", c.String("lang"))
+	fmt.Printf("%s build complate\n", ctx.String("lang"))
 	//docker image build
 	var dockerBuilder *exec.Cmd
+	ctxBuild, _ := Initial(ctx)
+	version := ctx.String("tag")
+	if version == "" {
+		version = "latest"
+	}
+	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
 	if needSudo() {
 		dockerBuilder = exec.Command("sudo", "docker", "build",
 			"-f", "Dockerfile-dev",
@@ -140,17 +149,27 @@ func buildAction(c *cli.Context) error {
 	fmt.Println("docker build complate")
 	return nil
 }
-func pushAction(c *cli.Context) error {
+
+func pushAction(ctx *cli.Context) error {
 	var (
 		pushCmd *exec.Cmd
 		stderr  bytes.Buffer
 		stdout  bytes.Buffer
 	)
+	ctxBuild, _ := Initial(ctx)
+	version := ctx.String("tag")
+	if version == "" {
+		version = "latest"
+	}
+	env := ctx.String("env")
+	if env == "" {
+		env = Env
+	}
+	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
 	if needSudo() {
 		pushCmd = exec.Command("sudo", "docker", "push", registryPath)
 	} else {
 		pushCmd = exec.Command("docker", "push", registryPath)
-
 	}
 	pushCmd.Stderr = &stderr
 	pushCmd.Stdout = &stdout
@@ -163,7 +182,8 @@ func pushAction(c *cli.Context) error {
 	fmt.Println("docker push images complate")
 	return nil
 }
-func loginAction(c *cli.Context) error {
+
+func loginAction(ctx *cli.Context) error {
 	var (
 		loginCmd *exec.Cmd
 		stderr   bytes.Buffer
@@ -179,7 +199,6 @@ func loginAction(c *cli.Context) error {
 	loginCmd.Stderr = &stderr
 	loginCmd.Stdout = &stdout
 	fmt.Println(loginCmd.String()) //打印执行命令
-	// fmt.Println("docker login")
 	if err := loginCmd.Run(); err != nil {
 		fmt.Println(stderr.String())
 		return fmt.Errorf("docker login fail, error: %s.stderr: %s", err, stderr.String())
@@ -188,6 +207,3 @@ func loginAction(c *cli.Context) error {
 
 	return nil
 }
-
-//docker build --platform=linux/amd64 -t registry.cn-hangzhou.aliyuncs.com/unipal/test_admindashboard:latest .
-//CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o dpcd
