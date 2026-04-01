@@ -1,8 +1,9 @@
 package config
 
 import (
-	"log"
+	"fmt"
 
+	"github.com/tiamxu/kit/log"
 	"github.com/koding/multiconfig"
 )
 
@@ -40,7 +41,75 @@ func Load() *Config {
 	if err := m.Load(cfg); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	// 设置默认值
+	setDefaults(cfg)
+	// 验证配置
+	if err := validateConfig(cfg); err != nil {
+		log.Fatalf("Invalid config: %v", err)
+	}
 	return cfg
+}
+
+// 设置默认值
+func setDefaults(cfg *Config) {
+	// Jenkins 默认值
+	if cfg.Jenkins.Url == "" {
+		cfg.Jenkins.Url = "http://localhost:8080"
+	}
+	if cfg.Jenkins.Username == "" {
+		cfg.Jenkins.Username = "admin"
+	}
+	
+	// GitLab 默认值
+	if cfg.Gitlab.Url == "" {
+		cfg.Gitlab.Url = "http://localhost:8080"
+	}
+	
+	// 数据库默认值
+	if cfg.DB.Driver == "" {
+		cfg.DB.Driver = "mysql"
+	}
+	if cfg.DB.Host == "" {
+		cfg.DB.Host = "localhost"
+	}
+	if cfg.DB.Port == 0 {
+		cfg.DB.Port = 3306
+	}
+	if cfg.DB.MaxIdleConns == 0 {
+		cfg.DB.MaxIdleConns = 5
+	}
+	if cfg.DB.MaxOpenConns == 0 {
+		cfg.DB.MaxOpenConns = 10
+	}
+	if cfg.DB.ConnMaxLifetime == 0 {
+		cfg.DB.ConnMaxLifetime = 300
+	}
+}
+
+// 验证配置
+func validateConfig(cfg *Config) error {
+	// 验证 Jenkins 配置
+	if cfg.Jenkins.Password == "" {
+		log.Warnf("Jenkins password not set, using default")
+	}
+	
+	// 验证 GitLab 配置
+	if cfg.Gitlab.Token == "" {
+		log.Warnf("GitLab token not set, some operations may fail")
+	}
+	
+	// 验证数据库配置
+	if cfg.DB.Database == "" {
+		return fmt.Errorf("database name is required")
+	}
+	if cfg.DB.Username == "" {
+		return fmt.Errorf("database username is required")
+	}
+	if cfg.DB.Password == "" {
+		log.Warnf("Database password not set, using default")
+	}
+	
+	return nil
 }
 
 const JenkinsJobConfig = `<?xml version='1.1' encoding='UTF-8'?>

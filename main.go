@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/tiamxu/kit/cli"
+	"github.com/tiamxu/kit/log"
 	"github.com/tiamxu/leister/tools/build"
 	"github.com/tiamxu/leister/tools/jenkins"
 	"github.com/tiamxu/leister/tools/gitlab"
@@ -9,6 +10,16 @@ import (
 )
 
 func main() {
+	// 初始化日志
+	if err := log.InitLogger(&log.Config{
+		Level:  "info",
+		Type:   "stdout",
+		Format: "text",
+	}); err != nil {
+		panic(err)
+	}
+	defer log.Sync()
+
 	app := cli.NewApp(cli.AppConfig{
 		Name:        "gigctl",
 		Description: "DevOps tools for building, CI/CD and deployment",
@@ -27,6 +38,6 @@ func main() {
 	)
 
 	if err := app.Run(); err != nil {
-		panic(err)
+		log.Fatalf("Error: %v", err)
 	}
 }

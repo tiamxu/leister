@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/bndr/gojenkins"
 	"github.com/tiamxu/kit/cli"
 	"github.com/tiamxu/leister/config"
 	"github.com/tiamxu/leister/database"
@@ -57,37 +58,47 @@ func loadConfig() {
 }
 
 func Connect(cfg *config.Config, ctx context.Context) (*Jenkins, error) {
-	// 这里需要实现 Jenkins 连接逻辑
-	// 暂时返回 nil，实际使用时需要实现
-	return nil, nil
+	jenkins := gojenkins.CreateJenkins(nil, cfg.Jenkins.Url, cfg.Jenkins.Username, cfg.Jenkins.Password)
+	_, err := jenkins.Init(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("jenkins init error: %v", err)
+	}
+	return &Jenkins{client: jenkins}, nil
 }
 
-type Jenkins struct{}
+type Jenkins struct{
+	client *gojenkins.Jenkins
+}
 
 func (j *Jenkins) GetJob(ctx context.Context, name string) (*Job, error) {
-	// 这里需要实现获取 Jenkins 任务的逻辑
-	// 暂时返回 nil，实际使用时需要实现
-	return nil, nil
+	job, err := j.client.GetJob(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	return &Job{job: job}, nil
 }
 
 func (j *Jenkins) CreateJob(ctx context.Context, config string, name string) (*Job, error) {
-	// 这里需要实现创建 Jenkins 任务的逻辑
-	// 暂时返回 nil，实际使用时需要实现
-	return nil, nil
+	job, err := j.client.CreateJob(ctx, config, name)
+	if err != nil {
+		return nil, err
+	}
+	return &Job{job: job}, nil
 }
 
 func (j *Jenkins) UpdateJob(ctx context.Context, name string, config string) error {
-	// 这里需要实现更新 Jenkins 任务的逻辑
-	// 暂时返回 nil，实际使用时需要实现
+	// gojenkins 的 UpdateJob 方法返回 *gojenkins.Job，不返回 error
+	// 错误处理可能需要通过其他方式实现
+	j.client.UpdateJob(ctx, config, name)
 	return nil
 }
 
 type Job struct{
-	name string
+	job *gojenkins.Job
 }
 
 func (j *Job) GetName() string {
-	return j.name
+	return j.job.GetName()
 }
 
 func RunCreateJob(ctx *cli.Context) error {

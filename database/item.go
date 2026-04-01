@@ -1,6 +1,6 @@
 package database
 
-import "log"
+import "github.com/tiamxu/kit/log"
 
 // 操作数据库
 func ModifyDB(sql string, args ...interface{}) (int64, error) {
@@ -24,7 +24,7 @@ func insertItem(item Item) (int64, error) {
 
 func QueryItemWithCon(sql string) ([]Item, error) {
 	sql = "select code_id,app_name,app_group, http_url_to_repo from item " + sql
-	rows, err := QueryDB(sql)
+	rows, err := db.Query(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func QueryItemWithCon(sql string) ([]Item, error) {
 		var item Item
 		err := rows.Scan(&item.CodeID, &item.AppName, &item.AppGroup, &item.HTTPURLToRepo)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("Scan error: %v", err)
 		}
 		items = append(items, item)
 	}
