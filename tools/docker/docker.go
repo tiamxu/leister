@@ -35,12 +35,12 @@ func (t *Tool) Flags() []cli.Flag {
 func (t *Tool) Commands() []*cli.Command {
 	return []*cli.Command{
 		cli.NewCommand("build").
-			SetDescription("Build code and docker image").
+			SetDescription("Build an image from a Dockerfile").
 			SetRun(func(ctx *cli.Context) error {
 				return RunBuild(ctx)
 			}),
 		cli.NewCommand("push").
-			SetDescription("Docker push image registry").
+			SetDescription("Upload an image to a registry").
 			SetRun(func(ctx *cli.Context) error {
 				return RunPush(ctx)
 			}),

@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/tiamxu/kit/cli"
-	"github.com/tiamxu/kit/log"
 )
 
 const (
@@ -93,105 +92,61 @@ func RunPush(ctx *cli.Context) error {
 }
 
 func buildAction(ctx *cli.Context) error {
-	// 检查 Dockerfile
-	dockerfile := "./Dockerfile-dev"
-	if _, err := os.Stat(dockerfile); os.IsNotExist(err) {
-		log.Errorf("Dockerfile not found: %s", dockerfile)
-		return errors.New("docker build failed, not found Dockerfile")
+	//dockerfile
+	if _, err := os.Stat("./Dockerfile-dev"); os.IsNotExist(err) {
+		return errors.New("docker build failed,not found Dockerfile")
 	}
-	log.Infof("Found Dockerfile: %s", dockerfile)
-
 	var (
 		stderr bytes.Buffer
 		stdout bytes.Buffer
 	)
-
-	// 代码构建
+	//code langue build
+	var codeBuilder *exec.Cmd
 	lang := ctx.String("lang")
 	env := ctx.String("env")
-	log.Infof("Building with language: %s, environment: %s", lang, env)
-
-	var codeBuilder *exec.Cmd
-	switch lang {
-	case "node":
-		// 先安装依赖
-		log.Infof("Installing Node.js dependencies...")
-		npmInstall := exec.Command("npm", "install", "--registry=https://registry.npm.taobao.org")
-		npmInstall.Stderr = &stderr
-		npmInstall.Stdout = &stdout
-		if err := npmInstall.Run(); err != nil {
-			log.Errorf("Failed to install dependencies: %s", stderr.String())
-			return fmt.Errorf("npm install failed: %w", err)
-		}
-		log.Infof("Dependencies installed successfully")
-		
-		// 构建代码
-		buildCmd := "npm run build" + ":" + env
-		codeBuilder = exec.Command("bash", "-c", buildCmd)
-	case "go":
-		// 确保 bin 目录存在
-		if err := os.MkdirAll("bin", 0755); err != nil {
-			log.Errorf("Failed to create bin directory: %v", err)
-			return fmt.Errorf("create bin directory failed: %w", err)
-		}
+	fmt.Printf("lang:%s,env:%s\n", lang, env)
+	if lang == "node" {
+		cmd := "npm run build" + ":" + env
+		exec.Command("npm", "install", "--registry=https://registry.npm.taobao.org")
+		codeBuilder = exec.Command("bash", "-c", cmd)
+	} else {
 		codeBuilder = exec.Command("go", "build", "-o", "bin/main")
 		codeBuilder.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
-	default:
-		return fmt.Errorf("unsupported language: %s", lang)
 	}
-
-	// 执行代码构建
 	codeBuilder.Stderr = &stderr
 	codeBuilder.Stdout = &stdout
-	log.Infof("Executing build command: %s", codeBuilder.String())
+	fmt.Println(codeBuilder.String())
 	if err := codeBuilder.Run(); err != nil {
-		log.Errorf("Build failed: %s", stderr.String())
-		return fmt.Errorf("code build failed: %w", err)
+		fmt.Println(stderr.String())
+		return err
 	}
-	log.Infof("Build output: %s", stdout.String())
-	log.Infof("%s build completed successfully", lang)
-
-	// Docker 镜像构建
-	ctxBuild, err := Initial(ctx)
-	if err != nil {
-		log.Errorf("Failed to initialize build context: %v", err)
-		return fmt.Errorf("init build context failed: %w", err)
-	}
-
+	fmt.Println(stdout.String())
+	fmt.Printf("%s build complate\n", ctx.String("lang"))
+	//docker image build
+	var dockerBuilder *exec.Cmd
+	ctxBuild, _ := Initial(ctx)
 	version := ctx.String("tag")
 	if version == "" {
 		version = "latest"
-		log.Warnf("Tag not specified, using default: latest")
 	}
-
 	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
-	log.Infof("Building Docker image: %s", registryPath)
-
-	var dockerBuilder *exec.Cmd
-	args := []string{
-		"build",
-		"-f", dockerfile,
-		"-t", registryPath,
-		"--platform", "linux/amd64", // 确保构建 Linux 镜像
-		".",
-	}
-
 	if needSudo() {
-		dockerBuilder = exec.Command("sudo", append([]string{"docker"}, args...)...)
+		dockerBuilder = exec.Command("sudo", "docker", "build",
+			"-f", "Dockerfile-dev",
+			"-t", registryPath, ".")
 	} else {
-		dockerBuilder = exec.Command("docker", args...)
+		dockerBuilder = exec.Command("docker", "build",
+			"-f", "Dockerfile-dev",
+			"-t", registryPath, ".")
 	}
-
 	dockerBuilder.Stderr = &stderr
 	dockerBuilder.Stdout = &stdout
-	log.Infof("Executing Docker build: %s", dockerBuilder.String())
+	fmt.Println(dockerBuilder.String())
 	if err := dockerBuilder.Run(); err != nil {
-		log.Errorf("Docker build failed: %s", stderr.String())
-		return fmt.Errorf("docker build failed: %w", err)
+		fmt.Println(stderr.String())
+		return err
 	}
-	log.Infof("Docker build output: %s", stdout.String())
-	log.Infof("Docker image built successfully: %s", registryPath)
-
+	fmt.Println("docker build complate")
 	return nil
 }
 
@@ -201,48 +156,30 @@ func pushAction(ctx *cli.Context) error {
 		stderr  bytes.Buffer
 		stdout  bytes.Buffer
 	)
-
-	ctxBuild, err := Initial(ctx)
-	if err != nil {
-		log.Errorf("Failed to initialize build context: %v", err)
-		return fmt.Errorf("init build context failed: %w", err)
-	}
-
+	ctxBuild, _ := Initial(ctx)
 	version := ctx.String("tag")
 	if version == "" {
 		version = "latest"
-		log.Warnf("Tag not specified, using default: latest")
 	}
-
 	env := ctx.String("env")
 	if env == "" {
 		env = Env
-		log.Warnf("Environment not specified, using default: %s", Env)
 	}
-
 	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
-	log.Infof("Pushing Docker image: %s", registryPath)
-
-	args := []string{"push", registryPath}
-
 	if needSudo() {
-		pushCmd = exec.Command("sudo", append([]string{"docker"}, args...)...)
+		pushCmd = exec.Command("sudo", "docker", "push", registryPath)
 	} else {
-		pushCmd = exec.Command("docker", args...)
+		pushCmd = exec.Command("docker", "push", registryPath)
 	}
-
 	pushCmd.Stderr = &stderr
 	pushCmd.Stdout = &stdout
-	log.Infof("Executing Docker push: %s", pushCmd.String())
-
+	fmt.Println(pushCmd.String())
+	fmt.Println("docker push images")
 	if err := pushCmd.Run(); err != nil {
-		log.Errorf("Docker push failed: %s", stderr.String())
-		return fmt.Errorf("docker push failed: %w", err)
+		fmt.Println(stderr.String())
+		return err
 	}
-
-	log.Infof("Docker push output: %s", stdout.String())
-	log.Infof("Docker image pushed successfully: %s", registryPath)
-
+	fmt.Println("docker push images complate")
 	return nil
 }
 
@@ -252,37 +189,21 @@ func loginAction(ctx *cli.Context) error {
 		stderr   bytes.Buffer
 		stdout   bytes.Buffer
 	)
-
-	registry := "https://registry.cn-hangzhou.aliyuncs.com"
-	username := "root"
-	password := "123456"
-
-	log.Infof("Logging into Docker registry: %s", registry)
-
-	args := []string{
-		"login",
-		"--username", username,
-		"--password", password,
-		registry,
-	}
-
 	if needSudo() {
-		loginCmd = exec.Command("sudo", append([]string{"docker"}, args...)...)
+		loginCmd = exec.Command("sudo", "docker", "login",
+			"--username=root", "--password=123456",
+			"https://registry.cn-hangzhou.aliyuncs.com")
 	} else {
-		loginCmd = exec.Command("docker", args...)
+		loginCmd = exec.Command("docker", "login", "--username=root", "--password=123456", "https://registry.cn-hangzhou.aliyuncs.com")
 	}
-
 	loginCmd.Stderr = &stderr
 	loginCmd.Stdout = &stdout
-	log.Infof("Executing Docker login: %s", loginCmd.String())
-
+	fmt.Println(loginCmd.String()) //打印执行命令
 	if err := loginCmd.Run(); err != nil {
-		log.Errorf("Docker login failed: %s", stderr.String())
-		return fmt.Errorf("docker login failed: %w", err)
+		fmt.Println(stderr.String())
+		return fmt.Errorf("docker login fail, error: %s.stderr: %s", err, stderr.String())
 	}
-
-	log.Infof("Docker login output: %s", stdout.String())
-	log.Infof("Docker login successful")
+	fmt.Println("docker login success")
 
 	return nil
 }

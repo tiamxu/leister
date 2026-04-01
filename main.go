@@ -4,8 +4,9 @@ import (
 	"github.com/tiamxu/kit/cli"
 	"github.com/tiamxu/kit/log"
 	"github.com/tiamxu/leister/tools/build"
-	"github.com/tiamxu/leister/tools/jenkins"
+	"github.com/tiamxu/leister/tools/docker"
 	"github.com/tiamxu/leister/tools/gitlab"
+	"github.com/tiamxu/leister/tools/jenkins"
 	"github.com/tiamxu/leister/tools/kube"
 )
 
@@ -32,8 +33,9 @@ func main() {
 
 	app.RegisterTool(
 		&build.Tool{},
-		&jenkins.Tool{},
+		&docker.Tool{},
 		&gitlab.Tool{},
+		&jenkins.Tool{},
 		&kube.Tool{},
 	)
 
