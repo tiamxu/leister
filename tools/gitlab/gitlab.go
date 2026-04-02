@@ -1,153 +1,115 @@
 package gitlab
 
 import (
-	"errors"
 	"fmt"
-	"log"
 
 	"github.com/tiamxu/kit/cli"
-	"github.com/tiamxu/leister/config"
-	"github.com/tiamxu/leister/database"
-	"github.com/xanzy/go-gitlab"
+	"github.com/tiamxu/kit/log"
+	"github.com/tiamxu/leister/client"
 )
 
-type Tool struct{}
-
-func (t *Tool) Name() string        { return "gitlab" }
-func (t *Tool) Description() string { return "Manage gitlab cmd" }
-
-func (t *Tool) Flags() []cli.Flag {
-	return []cli.Flag{
-		cli.StringFlag("name", "n", "", "Set gitlab project name"),
-		cli.StringFlag("group", "g", "", "Set gitlab group"),
-	}
+// Tool GitLab 工具
+type Tool struct {
+	Client *client.Client
 }
 
+// Name 工具名称
+func (t *Tool) Name() string { return "git" }
+
+// Description 工具描述
+func (t *Tool) Description() string { return "Manage gitlab cmd" }
+
+// Flags 工具全局标志
+func (t *Tool) Flags() []cli.Flag {
+	// 不在根命令添加 Flags，只在子命令中添加，避免解析顺序问题
+	return []cli.Flag{}
+}
+
+// Commands 工具命令
 func (t *Tool) Commands() []*cli.Command {
 	return []*cli.Command{
 		cli.NewCommand("get").
 			SetDescription("Get gitlab project info console").
-			AddFlags(cli.RequiredFlag(cli.StringFlag("name", "n", "", "Set gitlab project name"))).
-			AddFlags(cli.RequiredFlag(cli.StringFlag("group", "g", "", "Set gitlab group"))).
+			AddFlags(cli.StringFlag("name", "n", "", "Set gitlab project name")).
+			AddFlags(cli.StringFlag("group", "g", "", "Set gitlab group")).
 			SetRun(func(ctx *cli.Context) error {
-				return RunGetProject(ctx)
+				return t.RunGetProject(ctx)
 			}),
 		cli.NewCommand("gen").
 			SetDescription("Generate gitlab project data to db").
-			AddFlags(cli.RequiredFlag(cli.StringFlag("group", "g", "", "Set gitlab group"))).
+			AddFlags(cli.StringFlag("group", "g", "", "Set gitlab group")).
 			SetRun(func(ctx *cli.Context) error {
-				return RunGenProject(ctx)
+				return t.RunGenProject(ctx)
 			}),
 	}
 }
 
-var cfg *config.Config
+// RunGetProject 执行获取 GitLab 项目命令
+func (t *Tool) RunGetProject(ctx *cli.Context) error {
+	name := ctx.String("name")
+	group := ctx.String("group")
 
-func init() {
-	//load config
-	loadConfig()
-}
-
-func loadConfig() {
-	cfg = config.Load()
-}
-
-func Connect(cfg *config.Config) (*gitlab.Client, error) {
-	return gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
-}
-
-func RunGetProject(ctx *cli.Context) error {
-	return getProject(ctx)
-}
-
-func RunGenProject(ctx *cli.Context) error {
-	return genProjects(ctx)
-}
-
-func genProjects(ctx *cli.Context) error {
-	appGroup := ctx.String("group")
-	if appGroup == "" {
-		return errors.New("required OPTIONS --group or -g")
+	if name == "" {
+		return fmt.Errorf("project name is required")
 	}
-	var item = database.Item{}
-	var items = []database.Item{}
-	git, err := Connect(cfg)
+	if group == "" {
+		return fmt.Errorf("group is required")
+	}
+
+	// 创建 GitLab 项目请求
+	req := &client.GitlabProjectRequest{
+		Name:  name,
+		Group: group,
+	}
+
+	// 调用 API 客户端
+	resp, err := t.Client.GetGitlabProject(ctx.Context(), req)
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	var gid int
-	groupOption := &gitlab.ListGroupsOptions{Search: gitlab.String(appGroup)}
-	groups, _, err := git.Groups.ListGroups(groupOption)
-	if err != nil {
-		log.Fatalf("Failed to get groups err: %v", err)
-	}
-	group := groups[0]
-	gid = group.ID
-	opt := &gitlab.ListGroupProjectsOptions{ListOptions: gitlab.ListOptions{Page: 1, PerPage: 50}}
-	projects, _, err := git.Groups.ListGroupProjects(gid, opt)
-	if err != nil {
-		log.Fatalf("Failed to get projects err: %v", err)
-	}
-	for _, v := range projects {
-		fmt.Println(v.ID, v.Name, v.HTTPURLToRepo, v.SSHURLToRepo)
-		item.CodeID = v.ID
-		item.AppName = v.Name
-		item.AppGroup = appGroup
-		item.AppType = "go"
-		item.HTTPURLToRepo = v.HTTPURLToRepo
-		item.SSHURLToRepo = v.SSHURLToRepo
-		items = append(items, item)
-
+		return fmt.Errorf("get gitlab project failed: %v", err)
 	}
 
-	for _, item := range items {
-		n, err := database.AddItem(item)
-		if err != nil {
-			log.Fatalf("插入数据错误: %v", err)
-		}
-		fmt.Printf("insert success,affected rows%v\n", n)
-	}
+	// 打印项目信息
+	log.Infof("GitLab Project Info:")
+	log.Infof("ID: %d", resp.Project.ID)
+	log.Infof("Name: %s", resp.Project.Name)
+	log.Infof("Group: %s", resp.Project.Group)
+	log.Infof("HTTP URL: %s", resp.Project.HTTPURLToRepo)
+	log.Infof("SSH URL: %s", resp.Project.SSHURLToRepo)
 
 	return nil
-
 }
 
-func getProject(ctx *cli.Context) error {
-	appName := ctx.String("name")
-	appGroup := ctx.String("group")
-	if appName == "" || appGroup == "" {
-		return errors.New("required OPTIONS --name(or -n) and --group(or -g) ")
+// RunGenProject 执行生成 GitLab 项目数据命令
+func (t *Tool) RunGenProject(ctx *cli.Context) error {
+	group := ctx.String("group")
+
+	if group == "" {
+		return fmt.Errorf("group is required")
 	}
-	git, err := gitlab.NewClient(cfg.Gitlab.Token, gitlab.WithBaseURL(cfg.Gitlab.Url))
+
+	// 创建 GitLab 项目生成请求
+	req := &client.GitlabGenRequest{
+		Group: group,
+	}
+
+	// 调用 API 客户端
+	resp, err := t.Client.GenGitlabProjects(ctx.Context(), req)
 	if err != nil {
-		log.Fatalf("Failed to create gitlab client: %v", err)
+		return fmt.Errorf("gen gitlab project data failed: %v", err)
 	}
-	var gid int
-	groupOption := &gitlab.ListGroupsOptions{Search: gitlab.String(appGroup)}
-	groups, _, err := git.Groups.ListGroups(groupOption)
-	if err != nil {
-		log.Fatalf("Failed to get gitlab groups err: %v", err)
+
+	// 打印生成结果
+	log.Infof("GitLab Project Generation Result:")
+	log.Infof("Status: %s", resp.Status)
+	log.Infof("Message: %s", resp.Message)
+	log.Infof("Projects generated: %d", len(resp.Projects))
+
+	// 打印项目列表
+	for _, project := range resp.Projects {
+		log.Infof("- %s (ID: %d)", project.Name, project.ID)
+		log.Infof("  HTTP URL: %s", project.HTTPURLToRepo)
+		log.Infof("  SSH URL: %s", project.SSHURLToRepo)
 	}
-	if len(groups) == 0 {
-		fmt.Println("NOT Found Gitlab Group...")
-		return nil
-	}
-	group := groups[0]
-	gid = group.ID
-	opt := &gitlab.ListGroupProjectsOptions{Search: gitlab.String(appName), ListOptions: gitlab.ListOptions{Page: 1, PerPage: 50}}
-	projects, _, err := git.Groups.ListGroupProjects(gid, opt)
-	if err != nil {
-		log.Fatalf("Failed to get projects err: %v", err)
-	}
-	if len(projects) == 0 {
-		fmt.Println("NOT Found Project...")
-		return nil
-	}
-	for _, v := range projects {
-		fmt.Printf("ProjectName: %v\n", v.Name)
-		fmt.Printf("ProjectID: %v\n", v.ID)
-		fmt.Printf("HTTP_URL_TO_Repo: %v\n", v.HTTPURLToRepo)
-		fmt.Printf("SSH_URL_To_Repo: %v\n", v.SSHURLToRepo)
-	}
+
 	return nil
 }

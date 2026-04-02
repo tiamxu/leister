@@ -1,72 +1,45 @@
 package config
 
 import (
-	"log"
-
-	"github.com/koding/multiconfig"
+	"os"
+	"strconv"
 )
 
+// Config 配置结构体
 type Config struct {
-	Jenkins `yaml:"jenkins"`
-	Gitlab  `yaml:"gitlab"`
-	DB      `yaml:"db"`
-}
-type Jenkins struct {
-	Url      string `yaml:"url"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	API APIConfig
 }
 
-type Gitlab struct {
-	Url   string `yaml:"url"`
-	Token string `yaml:"token"`
-}
-type DB struct {
-	Driver          string `yaml:"driver"`
-	Database        string `yaml:"database"`
-	Username        string `yaml:"username"`
-	Password        string `yaml:"password"`
-	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
-	MaxIdleConns    int    `yaml:"max_idle_conns"`
-	MaxOpenConns    int    `yaml:"max_open_conns"`
-	ConnMaxLifetime int    `yaml:"conn_max_lifetime"`
+// APIConfig API 配置
+type APIConfig struct {
+	BaseURL string
+	Timeout int
 }
 
+// Load 加载配置（从环境变量或默认值）
 func Load() *Config {
-	cfg := &Config{}
-	m := multiconfig.New()
-	// Load configuration from config.toml file
-	if err := m.Load(cfg); err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+	return &Config{
+		API: APIConfig{
+			BaseURL: getEnv("LEISTER_API_URL", "http://localhost:8080"),
+			Timeout: getEnvInt("LEISTER_API_TIMEOUT", 30),
+		},
 	}
-	return cfg
 }
 
-const JenkinsJobConfig = `<?xml version='1.1' encoding='UTF-8'?>
-<flow-definition plugin="workflow-job@1292.v27d8cc3e2602">
-<actions>
-  <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@2.2131.vb_9788088fdb_5"/>
-  <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@2.2131.vb_9788088fdb_5">
-	<jobProperties/>
-	<triggers/>
-	<parameters/>
-	<options/>
-  </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
-</actions>
-<description></description>
-<keepDependencies>false</keepDependencies>
-<properties/>
-<definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@3659.v582dc37621d8">
-  <script>node{
-	  stage(&apos;Loading&apos;)
-	  def rootDir = pwd()
-	  println(rootDir)
-	  def pipeline = load &apos;pipeline.groovy&apos;
-	  pipeline(&apos;${app_name}&apos;,&apos;${app_group}&apos;)
-}</script>
-  <sandbox>true</sandbox>
-</definition>
-<triggers/>
-<disabled>false</disabled>
-</flow-definition>`
+// getEnv 获取环境变量，如果不存在则返回默认值
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnvInt 获取环境变量（整数类型），如果不存在或解析失败则返回默认值
+func getEnvInt(key string, defaultValue int) int {
+	if valueStr := os.Getenv(key); valueStr != "" {
+		if value, err := strconv.Atoi(valueStr); err == nil {
+			return value
+		}
+	}
+	return defaultValue
+}

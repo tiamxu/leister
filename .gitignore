@@ -2,3 +2,4 @@ Dockerfile-dev
 bin
 cmd
 main
+gigctl
