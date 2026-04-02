@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/bndr/gojenkins v1.2.0
-	github.com/go-sql-driver/mysql v1.8.1
+	github.com/jmoiron/sqlx v1.4.0
 	github.com/koding/multiconfig v0.0.0-20171124222453-69c27309b2d7
 	github.com/tiamxu/kit v0.0.0-20230519061052-8dd21a1d8a48
 	github.com/xanzy/go-gitlab v0.83.0
@@ -16,7 +16,6 @@ require (
 replace github.com/tiamxu/kit => ../kit
 
 require (
-	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect

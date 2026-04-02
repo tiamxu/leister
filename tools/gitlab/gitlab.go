@@ -1,6 +1,5 @@
 package gitlab
 
-
 import (
 	"errors"
 	"fmt"
@@ -14,7 +13,7 @@ import (
 
 type Tool struct{}
 
-func (t *Tool) Name() string        { return "git" }
+func (t *Tool) Name() string        { return "gitlab" }
 func (t *Tool) Description() string { return "Manage gitlab cmd" }
 
 func (t *Tool) Flags() []cli.Flag {
@@ -70,7 +69,6 @@ func genProjects(ctx *cli.Context) error {
 	if appGroup == "" {
 		return errors.New("required OPTIONS --group or -g")
 	}
-	initMySQL()
 	var item = database.Item{}
 	var items = []database.Item{}
 	git, err := Connect(cfg)
@@ -152,23 +150,4 @@ func getProject(ctx *cli.Context) error {
 		fmt.Printf("SSH_URL_To_Repo: %v\n", v.SSHURLToRepo)
 	}
 	return nil
-}
-
-func initMySQL() {
-	dbConfig := &database.Config{
-		Driver:          cfg.DB.Driver,
-		Database:        cfg.DB.Database,
-		Username:        cfg.DB.Username,
-		Password:        cfg.DB.Password,
-		Host:            cfg.DB.Host,
-		Port:            cfg.DB.Port,
-		MaxIdleConns:    cfg.DB.MaxIdleConns,
-		MaxOpenConns:    cfg.DB.MaxOpenConns,
-		ConnMaxLifetime: cfg.DB.ConnMaxLifetime,
-	}
-	err := database.Connect(dbConfig)
-	if err != nil {
-		fmt.Printf("DB connect failed error:%v\n", err)
-	}
-	fmt.Println("MySQL Connect success....")
 }

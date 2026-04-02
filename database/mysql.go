@@ -1,61 +1,37 @@
 package database
 
 import (
-	"database/sql"
-	"fmt"
-	"time"
-
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/tiamxu/kit/sql"
+	"github.com/tiamxu/leister/config"
 )
 
 var db *sql.DB
 
-func Connect(dbConfig *Config) (err error) {
-	db, err = sql.Open(dbConfig.Driver, dbConfig.Source())
-	if err != nil {
-		return
+func Connect(dbConfig *config.DB) (err error) {
+	// 转换为 kit/sql 的 Config 结构
+	kConfig := &sql.Config{
+		Driver:          dbConfig.Driver,
+		Host:            dbConfig.Host,
+		Port:            dbConfig.Port,
+		Database:        dbConfig.Database,
+		Username:        dbConfig.Username,
+		Password:        dbConfig.Password,
+		MaxOpenConns:    dbConfig.MaxOpenConns,
+		MaxIdleConns:    dbConfig.MaxIdleConns,
+		ConnMaxLifetime: dbConfig.ConnMaxLifetime,
+		ConnMaxIdleTime: 60, // 默认值
 	}
-	err = db.Ping()
-	if err != nil {
-		return
-	}
-	db.SetMaxOpenConns(dbConfig.MaxOpenConns)
-	db.SetMaxIdleConns(dbConfig.MaxIdleConns)
-	db.SetConnMaxLifetime(time.Duration(dbConfig.ConnMaxLifetime) * time.Second)
+
+	db, err = sql.Connect(kConfig)
 	return
 }
 
-func AddItem(item Item) (int64, error) {
-	i, err := insertItem(item)
-	return i, err
+// GetDB 返回数据库连接
+func GetDB() *sql.DB {
+	return db
 }
 
-// 查询单行
-func QueryRowDB(sql string) *sql.Row {
-	return db.QueryRow(sql)
-}
-
-// 查询多行
-func QueryDB(sql string) (*sql.Rows, error) {
-	return db.Query(sql)
-}
-
-// func QueryItemWithName() (Item, error) {
-// 	var item Item
-// 	return item, nil
-// }
-
-// 查询所有数据
-func GetAllItemData() ([]Item, error) {
-	return QueryItemWithCon("")
-}
-
-func SelectItemByWhereWithGroup(group string, arg ...interface{}) ([]Item, error) {
-	whereSql := fmt.Sprintf("where app_group='%s'", group)
-	return QueryItemWithCon(whereSql)
-}
-
-func SelectItemByWhereWithName(name, group string, arg ...interface{}) ([]Item, error) {
-	whereSql := fmt.Sprintf("where app_name='%s' and app_group='%s'", name, group)
-	return QueryItemWithCon(whereSql)
+// IsNoRows 检查是否为记录不存在错误
+func IsNoRows(err error) bool {
+	return sql.IsNoRows(err)
 }

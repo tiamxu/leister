@@ -9,14 +9,19 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/tiamxu/kit/cli"
+	"github.com/tiamxu/kit/log"
 )
 
 const (
-	RegistryDomain    = "registry.cn-hangzhou.aliyuncs.com"
-	RegistryNamespace = "unipal"
-	Env               = "dev"
+	RegistryDomain    = "harbor.yeemiao.net.cn"
+	RegistryNamespace = "yeemiao"
+	DefaultEnv        = "dev"
+	// 登录信息硬编码
+	RegistryUsername = "xuliang"
+	RegistryPassword = "nD!dfjk1s613dv"
 )
 
 type Tool struct{}
@@ -25,49 +30,53 @@ func (t *Tool) Name() string        { return "docker" }
 func (t *Tool) Description() string { return "Manager docker cmd" }
 
 func (t *Tool) Flags() []cli.Flag {
-	return []cli.Flag{
-		cli.StringFlag("tag", "t", "latest", "Set docker image tag"),
-		cli.StringFlag("env", "e", "dev", "Set docker image env"),
-		cli.StringFlag("lang", "l", "go", "Set type of code langue"),
-	}
+	// 不在根命令添加 Flags，只在子命令中添加，避免解析顺序问题
+	return []cli.Flag{}
 }
 
 func (t *Tool) Commands() []*cli.Command {
 	return []*cli.Command{
 		cli.NewCommand("build").
 			SetDescription("Build an image from a Dockerfile").
+			AddFlags(
+				cli.StringFlag("tag", "t", "latest", "Set docker image tag"),
+				cli.StringFlag("env", "e", "dev", "Set docker image env"),
+				cli.StringFlag("lang", "l", "go", "Set type of code langue"),
+				cli.StringFlag("dockerfile", "f", "Dockerfile", "Path to Dockerfile"),
+			).
 			SetRun(func(ctx *cli.Context) error {
-				return RunBuild(ctx)
+				return t.RunBuild(ctx)
 			}),
 		cli.NewCommand("push").
 			SetDescription("Upload an image to a registry").
+			AddFlags(
+				cli.StringFlag("tag", "t", "latest", "Set docker image tag"),
+				cli.StringFlag("env", "e", "dev", "Set docker image env"),
+			).
 			SetRun(func(ctx *cli.Context) error {
-				return RunPush(ctx)
+				return t.RunPush(ctx)
 			}),
 	}
 }
 
-type Context struct {
+type ProjectContext struct {
 	Name, AbsPath string
 }
 
-func Initial(c *cli.Context) (*Context, error) {
+func (t *Tool) getProjectContext() (*ProjectContext, error) {
 	absPath, err := filepath.Abs("./")
 	if err != nil {
 		return nil, errors.New("get project absolute path failure, reason: " + err.Error())
 	}
 	absPath = strings.Replace(absPath, `\`, `/`, -1)
 	absPath = strings.TrimRight(absPath, "/")
-	var (
-		ctx = &Context{
-			Name:    filepath.Base(absPath),
-			AbsPath: absPath,
-		}
-	)
-	return ctx, nil
+	return &ProjectContext{
+		Name:    filepath.Base(absPath),
+		AbsPath: absPath,
+	}, nil
 }
 
-func needSudo() bool {
+func (t *Tool) needSudo() bool {
 	sysType := runtime.GOOS
 	if sysType == "linux" {
 		if os.Getuid() != 0 {
@@ -77,133 +86,159 @@ func needSudo() bool {
 	return false
 }
 
-func RunBuild(ctx *cli.Context) error {
-	if err := loginAction(ctx); err != nil {
-		return err
-	}
-	return buildAction(ctx)
-}
+func (t *Tool) executeCommand(cmd *exec.Cmd) error {
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 
-func RunPush(ctx *cli.Context) error {
-	if err := loginAction(ctx); err != nil {
-		return err
+	log.Infof("Executing: %s", cmd.String())
+	if err := cmd.Run(); err != nil {
+		log.Errorf("Command failed: %v", err)
+		log.Errorf("Stderr: %s", stderr.String())
+		return fmt.Errorf("command failed: %v, stderr: %s", err, stderr.String())
 	}
-	return pushAction(ctx)
-}
 
-func buildAction(ctx *cli.Context) error {
-	//dockerfile
-	if _, err := os.Stat("./Dockerfile-dev"); os.IsNotExist(err) {
-		return errors.New("docker build failed,not found Dockerfile")
-	}
-	var (
-		stderr bytes.Buffer
-		stdout bytes.Buffer
-	)
-	//code langue build
-	var codeBuilder *exec.Cmd
-	lang := ctx.String("lang")
-	env := ctx.String("env")
-	fmt.Printf("lang:%s,env:%s\n", lang, env)
-	if lang == "node" {
-		cmd := "npm run build" + ":" + env
-		exec.Command("npm", "install", "--registry=https://registry.npm.taobao.org")
-		codeBuilder = exec.Command("bash", "-c", cmd)
-	} else {
-		codeBuilder = exec.Command("go", "build", "-o", "bin/main")
-		codeBuilder.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
-	}
-	codeBuilder.Stderr = &stderr
-	codeBuilder.Stdout = &stdout
-	fmt.Println(codeBuilder.String())
-	if err := codeBuilder.Run(); err != nil {
-		fmt.Println(stderr.String())
-		return err
-	}
-	fmt.Println(stdout.String())
-	fmt.Printf("%s build complate\n", ctx.String("lang"))
-	//docker image build
-	var dockerBuilder *exec.Cmd
-	ctxBuild, _ := Initial(ctx)
-	version := ctx.String("tag")
-	if version == "" {
-		version = "latest"
-	}
-	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
-	if needSudo() {
-		dockerBuilder = exec.Command("sudo", "docker", "build",
-			"-f", "Dockerfile-dev",
-			"-t", registryPath, ".")
-	} else {
-		dockerBuilder = exec.Command("docker", "build",
-			"-f", "Dockerfile-dev",
-			"-t", registryPath, ".")
-	}
-	dockerBuilder.Stderr = &stderr
-	dockerBuilder.Stdout = &stdout
-	fmt.Println(dockerBuilder.String())
-	if err := dockerBuilder.Run(); err != nil {
-		fmt.Println(stderr.String())
-		return err
-	}
-	fmt.Println("docker build complate")
+	log.Infof("Command output: %s", stdout.String())
 	return nil
 }
 
-func pushAction(ctx *cli.Context) error {
-	var (
-		pushCmd *exec.Cmd
-		stderr  bytes.Buffer
-		stdout  bytes.Buffer
-	)
-	ctxBuild, _ := Initial(ctx)
+func (t *Tool) RunBuild(ctx *cli.Context) error {
+	if err := t.loginAction(); err != nil {
+		return err
+	}
+	return t.buildAction(ctx)
+}
+
+func (t *Tool) RunPush(ctx *cli.Context) error {
+	if err := t.loginAction(); err != nil {
+		return err
+	}
+	return t.pushAction(ctx)
+}
+
+func (t *Tool) buildAction(ctx *cli.Context) error {
+	dockerfile := ctx.String("dockerfile")
+	// Check if Dockerfile exists
+	if _, err := os.Stat(dockerfile); os.IsNotExist(err) {
+		return errors.New("docker build failed, not found Dockerfile: " + dockerfile)
+	}
+
+	// Code language build
+	lang := ctx.String("lang")
+	env := ctx.String("env")
+	log.Infof("Building with lang: %s, env: %s, dockerfile: %s", lang, env, dockerfile)
+
+	if lang == "node" {
+		// Install dependencies
+		npmInstallCmd := exec.Command("npm", "install", "--registry=https://registry.npm.taobao.org")
+		if err := t.executeCommand(npmInstallCmd); err != nil {
+			return err
+		}
+
+		// Build project
+		cmd := "npm run build:" + env
+		npmBuildCmd := exec.Command("bash", "-c", cmd)
+		if err := t.executeCommand(npmBuildCmd); err != nil {
+			return err
+		}
+	} else {
+		// Build Go project
+		goBuildCmd := exec.Command("go", "build", "-o", "bin/main")
+		goBuildCmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH=amd64")
+		if err := t.executeCommand(goBuildCmd); err != nil {
+			return err
+		}
+	}
+
+	log.Infof("%s build complete", lang)
+
+	// Docker image build
+	ctxBuild, err := t.getProjectContext()
+	if err != nil {
+		return err
+	}
+
 	version := ctx.String("tag")
 	if version == "" {
-		version = "latest"
+		// 使用 202502031112 格式的时间戳
+		version = time.Now().Format("200601021504")
 	}
+
+	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
+
+	var dockerBuildCmd *exec.Cmd
+	if t.needSudo() {
+		dockerBuildCmd = exec.Command("sudo", "docker", "build",
+			"-f", dockerfile,
+			"-t", registryPath, ".")
+	} else {
+		dockerBuildCmd = exec.Command("docker", "build",
+			"-f", dockerfile,
+			"-t", registryPath, ".")
+	}
+
+	if err := t.executeCommand(dockerBuildCmd); err != nil {
+		return err
+	}
+
+	log.Infof("Docker build complete: %s", registryPath)
+	return nil
+}
+
+func (t *Tool) pushAction(ctx *cli.Context) error {
+	ctxBuild, err := t.getProjectContext()
+	if err != nil {
+		return err
+	}
+
+	version := ctx.String("tag")
+	if version == "" {
+		// 使用 202502031112 格式的时间戳
+		version = time.Now().Format("200601021504")
+	}
+
 	env := ctx.String("env")
 	if env == "" {
-		env = Env
+		env = DefaultEnv
 	}
+
 	registryPath := fmt.Sprintf("%s/%s/%s:%s", RegistryDomain, RegistryNamespace, strings.ToLower(env+"_"+ctxBuild.Name), version)
-	if needSudo() {
+
+	var pushCmd *exec.Cmd
+	if t.needSudo() {
 		pushCmd = exec.Command("sudo", "docker", "push", registryPath)
 	} else {
 		pushCmd = exec.Command("docker", "push", registryPath)
 	}
-	pushCmd.Stderr = &stderr
-	pushCmd.Stdout = &stdout
-	fmt.Println(pushCmd.String())
-	fmt.Println("docker push images")
-	if err := pushCmd.Run(); err != nil {
-		fmt.Println(stderr.String())
+
+	log.Infof("Pushing Docker image: %s", registryPath)
+	if err := t.executeCommand(pushCmd); err != nil {
 		return err
 	}
-	fmt.Println("docker push images complate")
+
+	log.Infof("Docker push complete: %s", registryPath)
 	return nil
 }
 
-func loginAction(ctx *cli.Context) error {
-	var (
-		loginCmd *exec.Cmd
-		stderr   bytes.Buffer
-		stdout   bytes.Buffer
-	)
-	if needSudo() {
-		loginCmd = exec.Command("sudo", "docker", "login",
-			"--username=root", "--password=123456",
-			"https://registry.cn-hangzhou.aliyuncs.com")
-	} else {
-		loginCmd = exec.Command("docker", "login", "--username=root", "--password=123456", "https://registry.cn-hangzhou.aliyuncs.com")
-	}
-	loginCmd.Stderr = &stderr
-	loginCmd.Stdout = &stdout
-	fmt.Println(loginCmd.String()) //打印执行命令
-	if err := loginCmd.Run(); err != nil {
-		fmt.Println(stderr.String())
-		return fmt.Errorf("docker login fail, error: %s.stderr: %s", err, stderr.String())
-	}
-	fmt.Println("docker login success")
+func (t *Tool) loginAction() error {
+	registryURL := "https://" + RegistryDomain
 
+	var loginCmd *exec.Cmd
+	if t.needSudo() {
+		loginCmd = exec.Command("sudo", "docker", "login",
+			"--username="+RegistryUsername, "--password="+RegistryPassword,
+			registryURL)
+	} else {
+		loginCmd = exec.Command("docker", "login",
+			"--username="+RegistryUsername, "--password="+RegistryPassword,
+			registryURL)
+	}
+
+	log.Infof("Logging in to Docker registry: %s", registryURL)
+	if err := t.executeCommand(loginCmd); err != nil {
+		return fmt.Errorf("docker login failed: %v", err)
+	}
+
+	log.Infof("Docker login success")
 	return nil
 }

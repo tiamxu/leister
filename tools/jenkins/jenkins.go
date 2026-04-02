@@ -14,7 +14,7 @@ import (
 
 type Tool struct{}
 
-func (t *Tool) Name() string        { return "jks" }
+func (t *Tool) Name() string        { return "jenkins" }
 func (t *Tool) Description() string { return "Manage jenkins cmd" }
 
 func (t *Tool) Flags() []cli.Flag {
@@ -66,7 +66,7 @@ func Connect(cfg *config.Config, ctx context.Context) (*Jenkins, error) {
 	return &Jenkins{client: jenkins}, nil
 }
 
-type Jenkins struct{
+type Jenkins struct {
 	client *gojenkins.Jenkins
 }
 
@@ -93,7 +93,7 @@ func (j *Jenkins) UpdateJob(ctx context.Context, name string, config string) err
 	return nil
 }
 
-type Job struct{
+type Job struct {
 	job *gojenkins.Job
 }
 
@@ -147,7 +147,6 @@ func createJob(ctx *cli.Context) error {
 func createJobs(ctx *cli.Context) error {
 	appName := ctx.String("name")
 	appGroup := ctx.String("group")
-	initMySQL()
 	ctxBg := context.Background()
 	jenkins, err := Connect(cfg, ctxBg)
 	if err != nil {
@@ -162,7 +161,7 @@ func createJobs(ctx *cli.Context) error {
 	} else if appName != "" && appGroup != "" {
 		items, err = database.SelectItemByWhereWithName(appName, appGroup)
 		if err != nil {
-			return errors.New("SelectItemByWhereWitchName Error")
+			return errors.New("SelectItemByWhereWithName Error")
 		}
 	}
 	fmt.Printf("items:%v\n", items)
@@ -192,7 +191,6 @@ func createJobs(ctx *cli.Context) error {
 func updateJobs(ctx *cli.Context) error {
 	appName := ctx.String("name")
 	appGroup := ctx.String("group")
-	initMySQL()
 	ctxBg := context.Background()
 	jenkins, err := Connect(cfg, ctxBg)
 	if err != nil {
@@ -207,7 +205,7 @@ func updateJobs(ctx *cli.Context) error {
 	} else if appName != "" && appGroup != "" {
 		items, err = database.SelectItemByWhereWithName(appName, appGroup)
 		if err != nil {
-			return errors.New("SelectItemByWhereWitchName Error")
+			return errors.New("SelectItemByWhereWithName Error")
 		}
 	}
 	fmt.Printf("items:%v\n", items)
@@ -231,25 +229,6 @@ func updateJobs(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func initMySQL() {
-	dbConfig := &database.Config{
-		Driver:          cfg.DB.Driver,
-		Database:        cfg.DB.Database,
-		Username:        cfg.DB.Username,
-		Password:        cfg.DB.Password,
-		Host:            cfg.DB.Host,
-		Port:            cfg.DB.Port,
-		MaxIdleConns:    cfg.DB.MaxIdleConns,
-		MaxOpenConns:    cfg.DB.MaxOpenConns,
-		ConnMaxLifetime: cfg.DB.ConnMaxLifetime,
-	}
-	err := database.Connect(dbConfig)
-	if err != nil {
-		fmt.Printf("DB connect failed error:%v\n", err)
-		return
-	}
 }
 
 // generate job configuration file

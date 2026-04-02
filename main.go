@@ -3,7 +3,8 @@ package main
 import (
 	"github.com/tiamxu/kit/cli"
 	"github.com/tiamxu/kit/log"
-	"github.com/tiamxu/leister/tools/build"
+	"github.com/tiamxu/leister/config"
+	"github.com/tiamxu/leister/database"
 	"github.com/tiamxu/leister/tools/docker"
 	"github.com/tiamxu/leister/tools/gitlab"
 	"github.com/tiamxu/leister/tools/jenkins"
@@ -21,6 +22,14 @@ func main() {
 	}
 	defer log.Sync()
 
+	// 加载配置
+	cfg := config.Load()
+
+	// 初始化数据库连接
+	if err := database.Connect(&cfg.DB); err != nil {
+		log.Infoln("Database connection failed: %v", err)
+	}
+
 	app := cli.NewApp(cli.AppConfig{
 		Name:        "gigctl",
 		Description: "DevOps tools for building, CI/CD and deployment",
@@ -32,7 +41,6 @@ func main() {
 	})
 
 	app.RegisterTool(
-		&build.Tool{},
 		&docker.Tool{},
 		&gitlab.Tool{},
 		&jenkins.Tool{},
