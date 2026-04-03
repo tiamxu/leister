@@ -30,23 +30,23 @@ func (t *Tool) Commands() []*cli.Command {
 		cli.NewCommand("get").
 			SetDescription("Get k8s resource deployment").
 			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "", "", "Set deployment name")).
+			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
 			SetRun(func(ctx *cli.Context) error {
 				return t.RunGetDeployment(ctx)
 			}),
 		cli.NewCommand("restart").
 			SetDescription("Restart k8s resource deployment").
 			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "", "", "Set deployment name")).
+			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
 			SetRun(func(ctx *cli.Context) error {
 				return t.RunRestart(ctx)
 			}),
 		cli.NewCommand("create").
 			SetDescription("Create resource deployment").
 			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "", "", "Set deployment name")).
-			AddFlags(cli.StringFlag("image", "", "", "Set container image")).
-			AddFlags(cli.IntFlag("replicas", "", 1, "Set number of replicas")).
+			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
+			AddFlags(cli.StringFlag("image", "i", "", "Set deployment image")).
+			AddFlags(cli.IntFlag("replicas", "r", 1, "Set number of replicas")).
 			SetRun(func(ctx *cli.Context) error {
 				return t.CreateDeployment(ctx)
 			}),
