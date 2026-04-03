@@ -24,14 +24,14 @@ func main() {
 
 	// 加载配置（从环境变量或默认值）
 	cfg := config.Load()
-	log.Infof("API URL: %s, Timeout: %d", cfg.API.BaseURL, cfg.API.Timeout)
+	// log.Infof("API URL: %s, Timeout: %d", cfg.API.BaseURL, cfg.API.Timeout)
 
 	// 初始化 API 客户端
 	apiClient := client.NewClient(cfg)
 
 	// 初始化应用
 	app := cli.NewApp(cli.AppConfig{
-		Name:        "gigctl",
+		Name:        "zcli",
 		Description: "DevOps tools for building, CI/CD and deployment",
 		Version:     "0.0.1",
 	})

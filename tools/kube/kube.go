@@ -13,7 +13,7 @@ import (
 type Tool struct{}
 
 // Name 工具名称
-func (t *Tool) Name() string { return "kube" }
+func (t *Tool) Name() string { return "kubectl" }
 
 // Description 工具描述
 func (t *Tool) Description() string { return "Manage kubernetes resources" }

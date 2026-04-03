@@ -14,7 +14,7 @@ type Tool struct {
 }
 
 // Name 工具名称
-func (t *Tool) Name() string { return "jks" }
+func (t *Tool) Name() string { return "jenkins" }
 
 // Description 工具描述
 func (t *Tool) Description() string { return "Manage jenkins cmd" }

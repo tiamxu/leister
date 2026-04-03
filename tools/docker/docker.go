@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	RegistryDomain    = "harbor.yeemiao.net.cn"
+	RegistryDomain    = "harbor.xuliang.net.cn"
 	RegistryNamespace = "xuliang"
 	DefaultEnv        = "dev"
 	// 登录信息硬编码
