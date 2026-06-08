@@ -1,18 +1,19 @@
 package main
 
 import (
-	"github.com/tiamxu/kit/cli"
+	"os"
+
+	"github.com/spf13/cobra"
 	"github.com/tiamxu/kit/log"
 	"github.com/tiamxu/leister/client"
 	"github.com/tiamxu/leister/config"
-	"github.com/tiamxu/leister/tools/docker"
-	"github.com/tiamxu/leister/tools/gitlab"
-	"github.com/tiamxu/leister/tools/jenkins"
-	"github.com/tiamxu/leister/tools/kube"
+	"github.com/tiamxu/leister/docker"
+	"github.com/tiamxu/leister/gitlab"
+	"github.com/tiamxu/leister/jenkins"
+	"github.com/tiamxu/leister/kube"
 )
 
 func main() {
-	// 初始化日志（使用默认值）
 	if err := log.InitLogger(&log.Config{
 		Level:  "info",
 		Type:   "stdout",
@@ -22,30 +23,22 @@ func main() {
 	}
 	defer log.Sync()
 
-	// 加载配置（从环境变量或默认值）
 	cfg := config.Load()
-	// log.Infof("API URL: %s, Timeout: %d", cfg.API.BaseURL, cfg.API.Timeout)
-
-	// 初始化 API 客户端
 	apiClient := client.NewClient(cfg)
 
-	// 初始化应用
-	app := cli.NewApp(cli.AppConfig{
-		Name:        "zcli",
-		Description: "DevOps tools for building, CI/CD and deployment",
-		Version:     "0.0.1",
-	})
+	rootCmd := &cobra.Command{
+		Use:     "gigctl",
+		Short:   "DevOps tools for building, CI/CD and deployment",
+		Long:    "gigctl is a CLI toolset for Docker, Kubernetes, Jenkins and GitLab operations.",
+		Version: "0.0.1",
+	}
 
-	// 注册工具
-	app.RegisterTool(
-		&docker.Tool{},
-		&kube.Tool{},
-		&jenkins.Tool{Client: apiClient},
-		&gitlab.Tool{Client: apiClient},
-	)
+	docker.NewTool().AddCommands(rootCmd)
+	kube.NewTool().AddCommands(rootCmd)
+	jenkins.NewTool(apiClient).AddCommands(rootCmd)
+	gitlab.NewTool(apiClient).AddCommands(rootCmd)
 
-	// 启动应用
-	if err := app.Run(); err != nil {
-		log.Fatalf("Error: %v", err)
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
 	}
 }

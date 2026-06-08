@@ -5,59 +5,73 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/tiamxu/kit/cli"
+	"github.com/spf13/cobra"
 	"github.com/tiamxu/kit/log"
 )
 
 // Tool Kubernetes 工具
 type Tool struct{}
 
-// Name 工具名称
-func (t *Tool) Name() string { return "kubectl" }
+// NewTool 创建 Kubernetes 工具实例
+func NewTool() *Tool { return &Tool{} }
 
-// Description 工具描述
-func (t *Tool) Description() string { return "Manage kubernetes resources" }
-
-// Flags 工具全局标志
-func (t *Tool) Flags() []cli.Flag {
-	// 不在根命令添加 Flags，只在子命令中添加，避免解析顺序问题
-	return []cli.Flag{}
+// AddCommands 注册 Kubernetes 命令到根命令
+func (t *Tool) AddCommands(root *cobra.Command) {
+	cmd := &cobra.Command{
+		Use:   "kube",
+		Short: "Manage kubernetes resources",
+	}
+	cmd.AddCommand(t.getCmd(), t.restartCmd(), t.createCmd())
+	root.AddCommand(cmd)
 }
 
-// Commands 工具命令
-func (t *Tool) Commands() []*cli.Command {
-	return []*cli.Command{
-		cli.NewCommand("get").
-			SetDescription("Get k8s resource deployment").
-			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.RunGetDeployment(ctx)
-			}),
-		cli.NewCommand("restart").
-			SetDescription("Restart k8s resource deployment").
-			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.RunRestart(ctx)
-			}),
-		cli.NewCommand("create").
-			SetDescription("Create resource deployment").
-			AddFlags(cli.StringFlag("namespace", "n", "default", "Set kubernetes namespace")).
-			AddFlags(cli.StringFlag("name", "d", "", "Set deployment name")).
-			AddFlags(cli.StringFlag("image", "i", "", "Set deployment image")).
-			AddFlags(cli.IntFlag("replicas", "r", 1, "Set number of replicas")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.CreateDeployment(ctx)
-			}),
+func (t *Tool) getCmd() *cobra.Command {
+	var namespace, name string
+	cmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get k8s resource deployment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.RunGetDeployment(namespace, name)
+		},
 	}
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Set kubernetes namespace")
+	cmd.Flags().StringVarP(&name, "name", "d", "", "Set deployment name")
+	return cmd
+}
+
+func (t *Tool) restartCmd() *cobra.Command {
+	var namespace, name string
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart k8s resource deployment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.RunRestart(namespace, name)
+		},
+	}
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Set kubernetes namespace")
+	cmd.Flags().StringVarP(&name, "name", "d", "", "Set deployment name")
+	return cmd
+}
+
+func (t *Tool) createCmd() *cobra.Command {
+	var namespace, name, image string
+	var replicas int
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create resource deployment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.CreateDeployment(namespace, name, image, replicas)
+		},
+	}
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Set kubernetes namespace")
+	cmd.Flags().StringVarP(&name, "name", "d", "", "Set deployment name")
+	cmd.Flags().StringVarP(&image, "image", "i", "", "Set deployment image")
+	cmd.Flags().IntVarP(&replicas, "replicas", "r", 1, "Set number of replicas")
+	return cmd
 }
 
 // RunGetDeployment 执行获取部署命令
-func (t *Tool) RunGetDeployment(ctx *cli.Context) error {
-	namespace := ctx.String("namespace")
-	name := ctx.String("name")
-
+func (t *Tool) RunGetDeployment(namespace, name string) error {
 	var kubectlCmd *exec.Cmd
 	if name != "" {
 		kubectlCmd = exec.Command("kubectl", "get", "deployment", name, "-n", namespace, "-o", "yaml")
@@ -67,17 +81,14 @@ func (t *Tool) RunGetDeployment(ctx *cli.Context) error {
 
 	log.Infof("Getting deployment in namespace %s", namespace)
 	if err := t.executeCommand(kubectlCmd); err != nil {
-		return fmt.Errorf("kubectl get deployment failed: %v", err)
+		return fmt.Errorf("kubectl get deployment failed: %w", err)
 	}
 
 	return nil
 }
 
 // RunRestart 执行重启部署命令
-func (t *Tool) RunRestart(ctx *cli.Context) error {
-	namespace := ctx.String("namespace")
-	name := ctx.String("name")
-
+func (t *Tool) RunRestart(namespace, name string) error {
 	if name == "" {
 		return fmt.Errorf("deployment name is required")
 	}
@@ -86,14 +97,13 @@ func (t *Tool) RunRestart(ctx *cli.Context) error {
 
 	log.Infof("Restarting deployment %s in namespace %s", name, namespace)
 	if err := t.executeCommand(kubectlCmd); err != nil {
-		return fmt.Errorf("kubectl rollout restart failed: %v", err)
+		return fmt.Errorf("kubectl rollout restart failed: %w", err)
 	}
 
-	// 等待重启完成
 	kubectlStatusCmd := exec.Command("kubectl", "rollout", "status", "deployment", name, "-n", namespace)
 	log.Infof("Waiting for deployment %s to restart", name)
 	if err := t.executeCommand(kubectlStatusCmd); err != nil {
-		return fmt.Errorf("kubectl rollout status failed: %v", err)
+		return fmt.Errorf("kubectl rollout status failed: %w", err)
 	}
 
 	log.Infof("Deployment %s restarted successfully", name)
@@ -101,12 +111,7 @@ func (t *Tool) RunRestart(ctx *cli.Context) error {
 }
 
 // CreateDeployment 执行创建部署命令
-func (t *Tool) CreateDeployment(ctx *cli.Context) error {
-	namespace := ctx.String("namespace")
-	name := ctx.String("name")
-	image := ctx.String("image")
-	replicas := ctx.Int("replicas")
-
+func (t *Tool) CreateDeployment(namespace, name, image string, replicas int) error {
 	if name == "" {
 		return fmt.Errorf("deployment name is required")
 	}
@@ -118,19 +123,15 @@ func (t *Tool) CreateDeployment(ctx *cli.Context) error {
 
 	log.Infof("Creating deployment %s with image %s and %d replicas in namespace %s", name, image, replicas, namespace)
 	if err := t.executeCommand(kubectlCmd); err != nil {
-		return fmt.Errorf("kubectl create deployment failed: %v", err)
+		return fmt.Errorf("kubectl create deployment failed: %w", err)
 	}
 
 	log.Infof("Deployment %s created successfully", name)
 	return nil
 }
 
-// executeCommand 执行命令
 func (t *Tool) executeCommand(cmd *exec.Cmd) error {
-	// 设置命令的标准输出和标准错误
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	// 执行命令
 	return cmd.Run()
 }

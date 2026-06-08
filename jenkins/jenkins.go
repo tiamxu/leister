@@ -1,11 +1,13 @@
 package jenkins
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/tiamxu/kit/cli"
+	"github.com/spf13/cobra"
 	"github.com/tiamxu/kit/log"
 	"github.com/tiamxu/leister/client"
+	"github.com/tiamxu/leister/types"
 )
 
 // Tool Jenkins 工具
@@ -13,49 +15,62 @@ type Tool struct {
 	Client *client.Client
 }
 
-// Name 工具名称
-func (t *Tool) Name() string { return "jenkins" }
+// NewTool 创建 Jenkins 工具实例
+func NewTool(c *client.Client) *Tool { return &Tool{Client: c} }
 
-// Description 工具描述
-func (t *Tool) Description() string { return "Manage jenkins cmd" }
-
-// Flags 工具全局标志
-func (t *Tool) Flags() []cli.Flag {
-	// 不在根命令添加 Flags，只在子命令中添加，避免解析顺序问题
-	return []cli.Flag{}
+// AddCommands 注册 Jenkins 命令到根命令
+func (t *Tool) AddCommands(root *cobra.Command) {
+	cmd := &cobra.Command{
+		Use:   "jks",
+		Short: "Manage jenkins cmd",
+	}
+	cmd.AddCommand(t.createCmd(), t.ctsCmd(), t.updateCmd())
+	root.AddCommand(cmd)
 }
 
-// Commands 工具命令
-func (t *Tool) Commands() []*cli.Command {
-	return []*cli.Command{
-		cli.NewCommand("create").
-			SetDescription("Create one jenkins job").
-			AddFlags(cli.StringFlag("name", "n", "", "Set jenkins appName")).
-			AddFlags(cli.StringFlag("group", "g", "", "Set jenkins appGroup")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.RunCreateJob(ctx)
-			}),
-		cli.NewCommand("cts").
-			SetDescription("Create many jenkins jobs").
-			AddFlags(cli.StringFlag("group", "g", "", "Set jenkins appGroup")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.RunCreateJobs(ctx)
-			}),
-		cli.NewCommand("update").
-			SetDescription("Update many jenkins jobs config").
-			AddFlags(cli.StringFlag("name", "n", "", "Set jenkins appName")).
-			AddFlags(cli.StringFlag("group", "g", "", "Set jenkins appGroup")).
-			SetRun(func(ctx *cli.Context) error {
-				return t.RunUpdateJob(ctx)
-			}),
+func (t *Tool) createCmd() *cobra.Command {
+	var name, group string
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create one jenkins job",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.RunCreateJob(cmd.Context(), name, group)
+		},
 	}
+	cmd.Flags().StringVarP(&name, "name", "n", "", "Set jenkins appName")
+	cmd.Flags().StringVarP(&group, "group", "g", "", "Set jenkins appGroup")
+	return cmd
+}
+
+func (t *Tool) ctsCmd() *cobra.Command {
+	var group string
+	cmd := &cobra.Command{
+		Use:   "cts",
+		Short: "Create many jenkins jobs",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.RunCreateJobs(cmd.Context(), group)
+		},
+	}
+	cmd.Flags().StringVarP(&group, "group", "g", "", "Set jenkins appGroup")
+	return cmd
+}
+
+func (t *Tool) updateCmd() *cobra.Command {
+	var name, group string
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update many jenkins jobs config",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return t.RunUpdateJob(cmd.Context(), name, group)
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "", "Set jenkins appName")
+	cmd.Flags().StringVarP(&group, "group", "g", "", "Set jenkins appGroup")
+	return cmd
 }
 
 // RunCreateJob 执行创建 Jenkins 任务命令
-func (t *Tool) RunCreateJob(ctx *cli.Context) error {
-	name := ctx.String("name")
-	group := ctx.String("group")
-
+func (t *Tool) RunCreateJob(ctx context.Context, name, group string) error {
 	if name == "" {
 		return fmt.Errorf("appName is required")
 	}
@@ -63,16 +78,14 @@ func (t *Tool) RunCreateJob(ctx *cli.Context) error {
 		return fmt.Errorf("appGroup is required")
 	}
 
-	// 创建 Jenkins 任务请求
-	req := &client.JenkinsJobRequest{
+	req := &types.JenkinsJobRequest{
 		Name:  name,
 		Group: group,
 	}
 
-	// 调用 API 客户端
-	resp, err := t.Client.CreateJenkinsJob(ctx.Context(), req)
+	resp, err := t.Client.CreateJenkinsJob(ctx, req)
 	if err != nil {
-		return fmt.Errorf("create jenkins job failed: %v", err)
+		return fmt.Errorf("create jenkins job failed: %w", err)
 	}
 
 	log.Infof("Jenkins job created: %s", resp.Message)
@@ -80,25 +93,33 @@ func (t *Tool) RunCreateJob(ctx *cli.Context) error {
 }
 
 // RunCreateJobs 执行批量创建 Jenkins 任务命令
-func (t *Tool) RunCreateJobs(ctx *cli.Context) error {
-	group := ctx.String("group")
-
+func (t *Tool) RunCreateJobs(ctx context.Context, group string) error {
 	if group == "" {
 		return fmt.Errorf("appGroup is required")
 	}
 
-	// 这里简化处理，实际应该从数据库或其他来源获取项目列表
-	// 这里假设我们有一个项目列表
-	projects := []*client.JenkinsJobRequest{
-		{Name: "project1", Group: group},
-		{Name: "project2", Group: group},
-		{Name: "project3", Group: group},
+	// 先从 API 拉取真实项目列表（数据源：GitLab）
+	listResp, err := t.Client.ListJenkinsProjects(ctx, group)
+	if err != nil {
+		return fmt.Errorf("list projects failed: %w", err)
+	}
+	if len(listResp.Projects) == 0 {
+		log.Warnf("组 %s 下未找到任何项目，无需创建", group)
+		return nil
 	}
 
-	// 调用 API 客户端
-	resp, err := t.Client.CreateJenkinsJobs(ctx.Context(), projects)
+	projects := make([]*types.JenkinsJobRequest, 0, len(listResp.Projects))
+	for _, p := range listResp.Projects {
+		projects = append(projects, &types.JenkinsJobRequest{
+			Name:  p.Name,
+			Group: p.Group,
+		})
+	}
+
+	log.Infof("准备批量创建 %d 个 Jenkins 任务", len(projects))
+	resp, err := t.Client.CreateJenkinsJobs(ctx, projects)
 	if err != nil {
-		return fmt.Errorf("create jenkins jobs failed: %v", err)
+		return fmt.Errorf("create jenkins jobs failed: %w", err)
 	}
 
 	log.Infof("Jenkins jobs created: %s", resp.Message)
@@ -106,10 +127,7 @@ func (t *Tool) RunCreateJobs(ctx *cli.Context) error {
 }
 
 // RunUpdateJob 执行更新 Jenkins 任务命令
-func (t *Tool) RunUpdateJob(ctx *cli.Context) error {
-	name := ctx.String("name")
-	group := ctx.String("group")
-
+func (t *Tool) RunUpdateJob(ctx context.Context, name, group string) error {
 	if name == "" {
 		return fmt.Errorf("appName is required")
 	}
@@ -117,16 +135,14 @@ func (t *Tool) RunUpdateJob(ctx *cli.Context) error {
 		return fmt.Errorf("appGroup is required")
 	}
 
-	// 创建 Jenkins 任务请求
-	req := &client.JenkinsJobRequest{
+	req := &types.JenkinsJobRequest{
 		Name:  name,
 		Group: group,
 	}
 
-	// 调用 API 客户端
-	resp, err := t.Client.UpdateJenkinsJob(ctx.Context(), req)
+	resp, err := t.Client.UpdateJenkinsJob(ctx, req)
 	if err != nil {
-		return fmt.Errorf("update jenkins job failed: %v", err)
+		return fmt.Errorf("update jenkins job failed: %w", err)
 	}
 
 	log.Infof("Jenkins job updated: %s", resp.Message)
