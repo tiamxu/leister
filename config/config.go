@@ -20,18 +20,19 @@ type APIConfig struct {
 func Load() *Config {
 	return &Config{
 		API: APIConfig{
-			BaseURL: getEnv("LEISTER_API_URL", "http://localhost:8080"),
+			BaseURL: mustGetEnv("LEISTER_API_URL"),
 			Timeout: getEnvInt("LEISTER_API_TIMEOUT", 30),
 		},
 	}
 }
 
-// getEnv 获取环境变量，如果不存在则返回默认值
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+// mustGetEnv 获取必填环境变量，缺失则 panic
+func mustGetEnv(key string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		panic("环境变量 " + key + " 未设置，请检查配置")
 	}
-	return defaultValue
+	return value
 }
 
 // getEnvInt 获取环境变量（整数类型），如果不存在或解析失败则返回默认值

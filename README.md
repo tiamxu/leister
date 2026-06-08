@@ -30,16 +30,24 @@ Leister 是一个强大的 DevOps 工具集，用于简化 Docker 镜像构建�
 ```
 leister/
 ├── main.go              # 主入口文件
-├── config/              # 配置管理
-│   └── config.go        # 配置结构定义（使用环境变量）
-├── client/              # API 客户端
-│   └── client.go        # HTTP API 客户端
-├── tools/               # 工具模块
-│   ├── docker/          # Docker 镜像管理
-│   ├── gitlab/          # GitLab 项目管理
-│   ├── jenkins/         # Jenkins 任务管理
-│   └── kube/            # Kubernetes 部署管理
-└── go.mod               # 依赖管理
+├── config/              # 配置管理（环境变量）
+├── client/              # leister-api HTTP 客户端
+│   ├── client.go        # Client struct + postJSON / getJSON
+│   ├── jenkins.go       # Jenkins 相关方法
+│   └── gitlab.go        # GitLab 相关方法
+├── types/               # 请求/响应 DTO
+│   ├── jenkins.go
+│   └── gitlab.go
+├── pkg/e/               # 统一错误码
+│   ├── code.go
+│   └── msg.go
+├── docker/              # Docker 镜像管理（本地 exec）
+├── gitlab/              # GitLab 项目管理（API 调用）
+├── jenkins/             # Jenkins 任务管理（API 调用）
+├── kube/                # Kubernetes 部署管理（本地 exec）
+├── Makefile             # 标准化构建命令
+├── CHANGELOG.md         # 变更记录
+└── go.mod
 ```
 
 ## 安装
@@ -69,8 +77,10 @@ Leister 使用**环境变量**进行配置，无需配置文件。
 
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
-| `LEISTER_API_URL` | API 服务地址 | `http://localhost:8080` |
+| `LEISTER_API_URL` | API 服务地址（**必填**，缺失则启动失败） | 无 |
 | `LEISTER_API_TIMEOUT` | API 超时时间（秒） | `30` |
+| `DOCKER_REGISTRY_USERNAME` | Docker Registry 用户名（Jenkins/GitLab 凭证统一在 leister-api 端管理，Docker 因本地构建需此环境变量） | 无 |
+| `DOCKER_REGISTRY_PASSWORD` | Docker Registry 密码 | 无 |
 
 ### 配置示例
 
@@ -225,11 +235,12 @@ gigctl kube create -n deployment-name --image nginx:latest --replicas 3
 ## 技术栈
 
 - **开发语言**：Go 1.25+
-- **CLI 框架**：kit/cli（基于 cobra）
+- **CLI 框架**：[spf13/cobra](https://github.com/spf13/cobra)
 - **日志库**：kit/log
 - **HTTP 客户端**：标准库 net/http
 - **依赖库**：
-  - github.com/tiamxu/kit - 工具库
+  - github.com/spf13/cobra - CLI 框架
+  - github.com/tiamxu/kit - 工具库（日志）
 
 ## 架构说明
 
@@ -294,6 +305,18 @@ cd ../leister
 ./gigctl docker build
 ./gigctl jks create -n myjob -g mygroup
 ```
+
+## 错误码（pkg/e）
+
+| 码 | 含义 |
+|----|------|
+| 0 | 成功 |
+| 1001-1003 | Jenkins 相关（创建/更新/列表） |
+| 2001-2002 | GitLab 相关（获取/生成） |
+| 3001-3004 | Docker 相关（构建/推送/登录/凭证） |
+| 4001-4003 | Kube 相关（获取/创建/重启） |
+| 9001 | 参数无效 |
+| 9999 | 内部错误 |
 
 ## 贡献指南
 
