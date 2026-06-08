@@ -8,18 +8,18 @@ import (
 
 // GetGitlabProject 获取 GitLab 项目信息
 func (c *Client) GetGitlabProject(ctx context.Context, req *types.GitlabProjectRequest) (*types.GitlabProjectResponse, error) {
-	resp, err := c.postJSON(ctx, "/api/gitlab/project", req, &types.GitlabProjectResponse{})
-	if err != nil {
+	resp := &types.GitlabProjectResponse{}
+	if err := c.postJSON(ctx, "/api/gitlab/project", req, resp); err != nil {
 		return nil, err
 	}
-	return resp.(*types.GitlabProjectResponse), nil
+	return resp, nil
 }
 
 // GenGitlabProjects 生成 GitLab 项目数据
 func (c *Client) GenGitlabProjects(ctx context.Context, req *types.GitlabGenRequest) (*types.GitlabGenResponse, error) {
-	resp, err := c.postJSON(ctx, "/api/gitlab/gen", req, &types.GitlabGenResponse{})
-	if err != nil {
+	resp := &types.GitlabGenResponse{}
+	if err := c.postJSON(ctx, "/api/gitlab/gen", req, resp); err != nil {
 		return nil, err
 	}
-	return resp.(*types.GitlabGenResponse), nil
+	return resp, nil
 }

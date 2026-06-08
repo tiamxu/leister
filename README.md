@@ -306,17 +306,10 @@ cd ../leister
 ./gigctl jks create -n myjob -g mygroup
 ```
 
-## 错误码（pkg/e）
+## 错误处理
 
-| 码 | 含义 |
-|----|------|
-| 0 | 成功 |
-| 1001-1003 | Jenkins 相关（创建/更新/列表） |
-| 2001-2002 | GitLab 相关（获取/生成） |
-| 3001-3004 | Docker 相关（构建/推送/登录/凭证） |
-| 4001-4003 | Kube 相关（获取/创建/重启） |
-| 9001 | 参数无效 |
-| 9999 | 内部错误 |
+CLI 是 leister-api 的消费者，调用失败时直接打印 API 返回的 `[code] msg`，并以 exit code 1 退出。
+完整错误码定义见 [leister-api/doc/设计文档.md](https://github.com/tiamxu/leister-api/blob/master/doc/设计文档.md)。
 
 ## 贡献指南
 

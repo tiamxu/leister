@@ -14,6 +14,14 @@
 ### Security
 - **修复 Docker 凭证硬编码**：`RegistryPassword` 从硬编码改为读取 `DOCKER_REGISTRY_PASSWORD` 环境变量，缺失即报错
 
+### Error Code Refactor
+- **错误码迁到 leister-api**：按 zhilo 风格（5 位分段 + map[int]string 查表）实现 `leister-api/pkg/e/`
+  - 段位：101xx 通用 / 201xx Jenkins / 301xx GitLab / 999xx 内部
+  - 引入 `AppError` 类型 + `Unwrap()`，service 层返回业务错误，handler 层统一解析
+  - 统一响应结构 `{code, msg, data}`，原始 err 不外泄到前端
+  - handler 全部走 `e.OK` / `e.JSON` helper，禁止手写 `c.JSON(500, gin.H{"error": err.Error()})`
+- **CLI 端同步改造**：`client.go` 解析 `apiEnvelope{Code, Msg, Data}`，业务失败透传 `[code] msg`
+
 ### Fixed
 - **修复 `jks cts` 假批量 bug**：原代码硬编码 3 个 project1/2/3，现改为从 API 拉取真实项目列表
 - **修复 `BaseURL` 默认值导致静默失败**：未设置 `LEISTER_API_URL` 时改为启动失败并清晰提示，不再默认连 localhost
@@ -22,9 +30,10 @@
 ### Removed
 - **删除空文件** `tools/deploy/deploy.go` 及其目录
 - **删除 `.gitignore` 中的 `cmd` 行**（不再使用 cmd 目录）
-- **删除 `go.mod` 中的 `replace github.com/tiamxu/kit => ../kit`**（go.work 已接管）
+- **删除 `pkg/e/`**：CLI 端不需要错误码体系（错误信息由 API 透传），死代码清理
+- **删除 `G:\go\src\go.work`**：改用 `go.mod` 的 `replace github.com/tiamxu/kit => ../kit` 替代 workspace
 
 ### Added
-- **新增 `pkg/e/` 统一错误码**：包含 Jenkins/GitLab/Docker/Kube 错误码常量及中文错误信息查询
 - **新增 `Makefile`**：build / run / test / clean 标准化命令
-- **新增 `G:\go\src\go.work`**：kit / leister / leister-api 三模块共享 workspace
+- **client 解析新响应结构**：CLI 端解析 `{code, msg, data}` 三段式，code != 200 视为业务错误并打印 `[code] msg`
+- **client 修复 baseURL 尾斜杠**：`NewClient` 用 `strings.TrimRight` 去掉尾部 `/`，避免 `http://x/api//api/...` 拼接错误
